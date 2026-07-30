@@ -1,0 +1,220 @@
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum as SQLEnum,
+    ForeignKey,
+    Identity,
+    Integer,
+    Numeric,
+    String,
+)
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from domain.usuario import PapelUsuario
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class PecaORM(Base):
+    __tablename__ = "pecas"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    nome: Mapped[str] = mapped_column(String, nullable=False)
+    marca_modelo_compativel: Mapped[str] = mapped_column(String, nullable=False)
+    ano_compativel: Mapped[str] = mapped_column(String, nullable=False)
+    preco: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    quantidade_estoque: Mapped[int] = mapped_column(Integer, nullable=False)
+    imagem_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    quantidade_minima: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class UsuarioORM(Base):
+    __tablename__ = "usuarios"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    nome: Mapped[str] = mapped_column(String, nullable=False)
+    email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    senha_hash: Mapped[str] = mapped_column(String, nullable=False)
+    papel: Mapped[PapelUsuario] = mapped_column(
+        SQLEnum(
+            PapelUsuario,
+            name="papel_usuario",
+            values_callable=lambda enum_cls: [item.value for item in enum_cls],
+        ),
+        nullable=False,
+    )
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class MensagemORM(Base):
+    __tablename__ = "mensagens"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clientes.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    texto: Mapped[str] = mapped_column(String, nullable=False)
+    categoria: Mapped[str] = mapped_column(String, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class ClienteORM(Base):
+    __tablename__ = "clientes"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    nome: Mapped[str] = mapped_column(String, nullable=False)
+    telefone: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    email: Mapped[str | None] = mapped_column(String, nullable=True)
+    endereco: Mapped[str | None] = mapped_column(String, nullable=True)
+    cpf_cnpj: Mapped[str | None] = mapped_column(String, nullable=True)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class ProtocoloORM(Base):
+    __tablename__ = "protocolos"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    numero: Mapped[int] = mapped_column(
+        Integer, Identity(), unique=True, nullable=False
+    )
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clientes.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    veiculo: Mapped[str] = mapped_column(String, nullable=False)
+    categoria: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    descricao: Mapped[str | None] = mapped_column(String, nullable=True)
+    mecanico_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class PedidoORM(Base):
+    __tablename__ = "pedidos"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    numero: Mapped[int] = mapped_column(
+        Integer, Identity(), unique=True, nullable=False
+    )
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clientes.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    peca_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("pecas.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    quantidade: Mapped[int] = mapped_column(Integer, nullable=False)
+    valor_total: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    tipo_entrega: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    endereco_entrega: Mapped[str | None] = mapped_column(String, nullable=True)
+    link_pagamento: Mapped[str | None] = mapped_column(String, nullable=True)
+    entregue_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class VeiculoORM(Base):
+    __tablename__ = "veiculos"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clientes.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    marca: Mapped[str] = mapped_column(String, nullable=False)
+    modelo: Mapped[str] = mapped_column(String, nullable=False)
+    ano: Mapped[str] = mapped_column(String, nullable=False)
+    placa: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class AgendamentoORM(Base):
+    __tablename__ = "agendamentos"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clientes.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    data_hora: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class MovimentacaoEstoqueORM(Base):
+    __tablename__ = "movimentacoes_estoque"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    peca_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("pecas.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    tipo: Mapped[str] = mapped_column(String, nullable=False)
+    quantidade: Mapped[int] = mapped_column(Integer, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )

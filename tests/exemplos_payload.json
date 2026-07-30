@@ -1,0 +1,123 @@
+{
+  "_leia_me": "Exemplos do formato de webhook messages.upsert da Evolution API v2, pra simular via Postman em POST /webhook/whatsapp sem precisar de conexão real com o WhatsApp. Reconstruídos a partir do formato documentado (event/instance/data.key/data.message/messageType) — os valores de url/mediaKey/fileSha256 dos exemplos de audio e imagem são placeholders fictícios (na Evolution API real eles apontam pra um blob criptografado), então não vão baixar nada de verdade; sirva só pra testar o roteamento por messageType.",
+
+  "texto": {
+    "event": "messages.upsert",
+    "instance": "wrenchiq",
+    "data": {
+      "key": {
+        "remoteJid": "5511987654321@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0C767D097E9ECFE1C"
+      },
+      "pushName": "João Silva",
+      "message": {
+        "conversation": "Bom dia! Vocês têm pastilha de freio para Honda CG 160?"
+      },
+      "messageType": "conversation",
+      "messageTimestamp": 1753300000,
+      "instanceId": "b3f1c2a4-9d3e-4e2b-8f1a-7c6d5e4f3a2b"
+    },
+    "destination": "https://sua-api.wrenchiq.com/webhook/whatsapp",
+    "date_time": "2026-07-23T14:32:10.000Z",
+    "sender": "5511999990000@s.whatsapp.net",
+    "server_url": "https://evolution.wrenchiq.com",
+    "apikey": "EXEMPLO-NAO-USE-EM-PRODUCAO"
+  },
+
+  "audio": {
+    "event": "messages.upsert",
+    "instance": "wrenchiq",
+    "data": {
+      "key": {
+        "remoteJid": "5511987654321@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0C767D097E9ECFE1D"
+      },
+      "pushName": "João Silva",
+      "message": {
+        "audioMessage": {
+          "url": "https://mmg.whatsapp.net/v/t62.7117-24/exemplo.enc",
+          "mimetype": "audio/ogg; codecs=opus",
+          "fileSha256": "kY3F2n9q8sT1uV7wX0yZ4aB6cD8eF1gH3iJ5kL7mN9o=",
+          "fileLength": "18452",
+          "seconds": 7,
+          "ptt": true,
+          "mediaKey": "aB3cD5eF7gH9iJ1kL3mN5oP7qR9sT1uV3wX5yZ7aB9c=",
+          "fileEncSha256": "zY8xW6vU4tS2rQ0pO8nM6lK4jI2hG0fE8dC6bA4z9=",
+          "directPath": "/v/t62.7117-24/exemplo",
+          "mediaKeyTimestamp": "1753300005"
+        }
+      },
+      "messageType": "audioMessage",
+      "messageTimestamp": 1753300005,
+      "instanceId": "b3f1c2a4-9d3e-4e2b-8f1a-7c6d5e4f3a2b"
+    },
+    "destination": "https://sua-api.wrenchiq.com/webhook/whatsapp",
+    "date_time": "2026-07-23T14:33:25.000Z",
+    "sender": "5511999990000@s.whatsapp.net",
+    "server_url": "https://evolution.wrenchiq.com",
+    "apikey": "EXEMPLO-NAO-USE-EM-PRODUCAO"
+  },
+
+  "imagem": {
+    "event": "messages.upsert",
+    "instance": "wrenchiq",
+    "data": {
+      "key": {
+        "remoteJid": "5511987654321@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0C767D097E9ECFE1E"
+      },
+      "pushName": "João Silva",
+      "message": {
+        "imageMessage": {
+          "url": "https://mmg.whatsapp.net/v/t62.7118-24/exemplo.enc",
+          "mimetype": "image/jpeg",
+          "caption": "Meu farol quebrou, dá pra ver?",
+          "fileSha256": "pQ1rS3tU5vW7xY9zA1bC3dE5fG7hI9jK1lM3nO5pQ=",
+          "fileLength": "84213",
+          "height": 960,
+          "width": 1280,
+          "mediaKey": "gH2iJ4kL6mN8oP0qR2sT4uV6wX8yZ0aB2cD4eF6g7=",
+          "fileEncSha256": "wV5uT3sR1qP9oN7mL5kJ3iH1gF9eD7cB5a3=",
+          "directPath": "/v/t62.7118-24/exemplo",
+          "jpegThumbnail": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQE"
+        }
+      },
+      "messageType": "imageMessage",
+      "messageTimestamp": 1753300050,
+      "instanceId": "b3f1c2a4-9d3e-4e2b-8f1a-7c6d5e4f3a2b"
+    },
+    "destination": "https://sua-api.wrenchiq.com/webhook/whatsapp",
+    "date_time": "2026-07-23T14:34:10.000Z",
+    "sender": "5511999990000@s.whatsapp.net",
+    "server_url": "https://evolution.wrenchiq.com",
+    "apikey": "EXEMPLO-NAO-USE-EM-PRODUCAO"
+  },
+
+  "eco_da_propria_instancia": {
+    "_observacao": "fromMe=true — mensagem enviada pelo próprio número do negócio (ex: pelo app do celular), o endpoint deve ignorar e não gerar triagem.",
+    "event": "messages.upsert",
+    "instance": "wrenchiq",
+    "data": {
+      "key": {
+        "remoteJid": "5511987654321@s.whatsapp.net",
+        "fromMe": true,
+        "id": "3EB0C767D097E9ECFE1F"
+      },
+      "pushName": "Wrench IQ Oficina",
+      "message": {
+        "conversation": "Já verificamos, temos em estoque!"
+      },
+      "messageType": "conversation",
+      "messageTimestamp": 1753300060,
+      "instanceId": "b3f1c2a4-9d3e-4e2b-8f1a-7c6d5e4f3a2b"
+    },
+    "destination": "https://sua-api.wrenchiq.com/webhook/whatsapp",
+    "date_time": "2026-07-23T14:34:20.000Z",
+    "sender": "5511999990000@s.whatsapp.net",
+    "server_url": "https://evolution.wrenchiq.com",
+    "apikey": "EXEMPLO-NAO-USE-EM-PRODUCAO"
+  }
+}

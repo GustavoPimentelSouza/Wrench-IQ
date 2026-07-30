@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+*.egg-info/
+
+# frontend
+node_modules/
+dist/
+*.tsbuildinfo

@@ -1,0 +1,39 @@
+services:
+  api:
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./domain:/app/domain
+      - ./application:/app/application
+      - ./adapters:/app/adapters
+      - ./infrastructure:/app/infrastructure
+      - ./alembic:/app/alembic
+      - ./tests:/app/tests
+      - ./pytest.ini:/app/pytest.ini
+      - ./conftest.py:/app/conftest.py
+      - ./.env.test:/app/.env.test
+      - ./main.py:/app/main.py
+
+  frontend:
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: wrenchiq_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@wrenchiq.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
+    ports:
+      - "5050:80"
+    volumes:
+      - wrenchiq_pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json
+    depends_on:
+      - postgres
+    networks:
+      - wrenchiq_net
+
+volumes:
+  wrenchiq_pgadmin_data:
