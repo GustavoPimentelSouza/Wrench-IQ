@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from adapters.pagamento import gerar_link_pagamento
@@ -6,7 +6,16 @@ from application.movimentacao_estoque_repository import MovimentacaoEstoqueRepos
 from application.peca_repository import PecaRepository
 from application.pedido_repository import PedidoRepository
 from domain.movimentacao_estoque import MovimentacaoEstoque, TipoMovimentacao
+from domain.peca import Peca
 from domain.pedido import Pedido, StatusPedido, TipoEntrega
+
+# Quanto tempo uma peça fica "reservada" (fora do estoque disponível) pra um
+# pedido de retirada local antes de expirar sozinho. Existe porque, com a
+# IA criando pedido a partir de uma conversa casual (baixo atrito), o risco
+# de "reserva fantasma" — cliente confirma no chat mas nunca aparece — é
+# maior do que quando era só um formulário manual. Sem prazo, a peça fica
+# presa pra sempre sem ninguém ter pago por ela.
+_PRAZO_RETIRADA_LOCAL = timedelta(hours=48)
 
 
 class PecaNaoEncontradaError(Exception):
@@ -49,6 +58,26 @@ class PedidoUseCases:
         endereco_entrega: str | None,
     ) -> Pedido:
         peca = await self._pecas.buscar_por_id(peca_id)
+        pedido = self._montar_pedido(
+            peca, cliente_id, peca_id, quantidade, tipo_entrega, endereco_entrega
+        )
+        pedido_criado = await self._pedidos.criar(pedido)
+
+        peca.quantidade_estoque -= quantidade
+        await self._pecas.atualizar(peca)
+        await self._registrar_movimentacao(peca_id, TipoMovimentacao.SAIDA, quantidade)
+
+        return pedido_criado
+
+    def _montar_pedido(
+        self,
+        peca: Peca | None,
+        cliente_id: UUID,
+        peca_id: UUID,
+        quantidade: int,
+        tipo_entrega: TipoEntrega,
+        endereco_entrega: str | None,
+    ) -> Pedido:
         if peca is None:
             raise PecaNaoEncontradaError()
         if peca.quantidade_estoque < quantidade:
@@ -59,7 +88,6 @@ class PedidoUseCases:
         # Preço nunca vem do cliente — sempre calculado a partir do valor
         # real cadastrado na peça (defesa contra manipulação via conversa/API).
         valor_total = peca.preco * quantidade
-
         status_inicial = (
             StatusPedido.AGUARDANDO_PAGAMENTO
             if tipo_entrega == TipoEntrega.ENVIO_REMOTO
@@ -79,14 +107,7 @@ class PedidoUseCases:
         )
         if tipo_entrega == TipoEntrega.ENVIO_REMOTO:
             pedido.link_pagamento = gerar_link_pagamento(pedido.id, valor_total)
-
-        pedido_criado = await self._pedidos.criar(pedido)
-
-        peca.quantidade_estoque -= quantidade
-        await self._pecas.atualizar(peca)
-        await self._registrar_movimentacao(peca_id, TipoMovimentacao.SAIDA, quantidade)
-
-        return pedido_criado
+        return pedido
 
     async def listar(
         self, status: StatusPedido | None = None, limit: int = 50, offset: int = 0
@@ -155,6 +176,31 @@ class PedidoUseCases:
             )
 
         return pedido_atualizado
+
+    async def cancelar_expirados(self) -> list[Pedido]:
+        """Cancela sozinho todo pedido de retirada local que passou do prazo
+        (_PRAZO_RETIRADA_LOCAL) sem o cliente aparecer, devolvendo a peça pro
+        estoque — reaproveita cancelar(), que já faz exatamente isso.
+
+        Não existe fila/agendador no projeto ainda (Redis é etapa futura do
+        CLAUDE.md, não faz sentido antecipar só por causa disso) — por isso
+        essa checagem é "preguiçosa": alguém precisa chamar esse método de
+        vez em quando (ver infrastructure/routers/pedidos.py, chamado toda
+        vez que a tela de Pedidos carrega) em vez de rodar sozinho em
+        segundo plano.
+        """
+        limite = datetime.now(timezone.utc) - _PRAZO_RETIRADA_LOCAL
+        # Sem filtro de data no banco de propósito — reaproveita o listar()
+        # que já existe (filtrado só por status) e filtra a data aqui, no
+        # Python. Simples o suficiente pro volume de um TCC; se o catálogo
+        # de pedidos crescer muito, aí sim vale mover esse filtro pro banco.
+        pendentes = await self._pedidos.listar(status=StatusPedido.AGUARDANDO_RETIRADA, limit=200)
+        expirados = [pedido for pedido in pendentes if pedido.criado_em < limite]
+
+        cancelados = []
+        for pedido in expirados:
+            cancelados.append(await self.cancelar(pedido.id))
+        return cancelados
 
     async def _exigir_pedido(self, pedido_id: UUID) -> Pedido:
         pedido = await self._pedidos.buscar_por_id(pedido_id)

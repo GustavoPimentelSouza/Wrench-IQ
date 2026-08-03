@@ -1,3 +1,6 @@
+from typing import Any
+
+from application.chat_service import RespostaChat
 from domain.mensagem import CategoriaMensagem
 
 
@@ -33,3 +36,27 @@ class FakeClassificador:
             if palavra in texto_normalizado:
                 return categoria
         return CategoriaMensagem.NAO_IDENTIFICADO
+
+
+class FakeChatService:
+    """Test double de application.chat_service.ChatService — nunca chama
+    ferramenta, só devolve um texto fixo e determinístico a partir da última
+    mensagem. Cobre o /webhook sem custo, sem chave de API e sem rede.
+    """
+
+    async def gerar_resposta(
+        self, mensagens: list[dict[str, Any]], ferramentas_disponiveis: list[dict[str, Any]]
+    ) -> RespostaChat:
+        ultima = mensagens[-1]["content"]
+        return RespostaChat(texto=f"[fake-ia] resposta para: {ultima}")
+
+
+class FakeEmbeddingService:
+    """Test double de application.embedding_service.EmbeddingService —
+    devolve um vetor determinístico (hash do texto), sem chamar o Gemini.
+    Cobre /pecas, /pedidos, /movimentacoes-estoque e /webhook sem custo.
+    """
+
+    async def gerar_embedding(self, texto: str) -> list[float]:
+        semente = sum(ord(c) for c in texto)
+        return [((semente + i) % 1000) / 1000 for i in range(768)]

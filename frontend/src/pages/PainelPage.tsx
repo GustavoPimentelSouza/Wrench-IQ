@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { MetricCard } from "../components/MetricCard";
 import { ProtocoloCard } from "../components/ProtocoloCard";
-import { METRICAS_MOCK } from "../mocks/protocolos";
+import { listarPecas } from "../services/pecaService";
 import { listarProtocolos } from "../services/protocoloService";
+import type { Peca } from "../types/peca";
 import type { Protocolo, StatusProtocolo } from "../types/protocolo";
 
 const COLUNAS: { status: StatusProtocolo; titulo: string }[] = [
@@ -11,31 +12,39 @@ const COLUNAS: { status: StatusProtocolo; titulo: string }[] = [
   { status: "pronto", titulo: "Pronto" },
 ];
 
+function contarEstoqueBaixo(pecas: Peca[]): number {
+  return pecas.filter(
+    (peca) => peca.quantidade_minima > 0 && peca.quantidade_estoque <= peca.quantidade_minima,
+  ).length;
+}
+
 export function PainelPage() {
   const [protocolos, setProtocolos] = useState<Protocolo[]>([]);
+  const [pecas, setPecas] = useState<Peca[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    listarProtocolos()
-      .then(setProtocolos)
-      .catch(() => setErro("Não foi possível carregar os protocolos."))
+    Promise.all([listarProtocolos(), listarPecas()])
+      .then(([protocolosCarregados, pecasCarregadas]) => {
+        setProtocolos(protocolosCarregados);
+        setPecas(pecasCarregadas);
+      })
+      .catch(() => setErro("Não foi possível carregar os dados do painel."))
       .finally(() => setCarregando(false));
   }, []);
 
+  const protocolosAbertos = protocolos.filter((p) => p.status !== "cancelado").length;
+
   return (
     <div>
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricCard
-          titulo="Protocolos abertos"
-          valor={String(METRICAS_MOCK.protocolosAbertos)}
-        />
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <MetricCard titulo="Protocolos abertos" valor={String(protocolosAbertos)} />
         <MetricCard
           titulo="Peças com estoque baixo"
-          valor={String(METRICAS_MOCK.pecasComEstoqueBaixo)}
+          valor={String(contarEstoqueBaixo(pecas))}
           tonalidade="alerta"
         />
-        <MetricCard titulo="Faturamento hoje" valor={METRICAS_MOCK.faturamentoHoje} />
       </div>
 
       <h2 className="mb-4 text-lg font-semibold text-gray-900">Protocolos</h2>

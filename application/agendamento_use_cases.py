@@ -17,6 +17,9 @@ class AgendamentoUseCases:
             raise ValueError("data_hora não pode ser no passado")
         return await self._repository.criar(agendamento)
 
+    async def listar(self) -> list[Agendamento]:
+        return await self._repository.listar()
+
     async def listar_por_cliente(self, cliente_id: UUID) -> list[Agendamento]:
         return await self._repository.listar_por_cliente(cliente_id)
 

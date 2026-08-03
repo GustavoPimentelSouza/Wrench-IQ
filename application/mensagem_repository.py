@@ -4,11 +4,25 @@ from uuid import UUID
 from domain.mensagem import Mensagem
 
 
-# Interface mais enxuta do projeto: Mensagem é registro histórico
-# (append-only, tipo log) — não existe "atualizar" nem "excluir" porque não
-# faz sentido editar uma mensagem que o cliente já mandou, só registrar e
-# consultar depois.
+# Mensagem é append-only (log) — sem excluir de propósito. A única "edição"
+# permitida é registrar_resposta, que preenche resposta_ia depois que a IA
+# responde (a mensagem em si, uma vez criada, não muda).
 class MensagemRepository(Protocol):
     async def criar(self, mensagem: Mensagem) -> Mensagem: ...
 
     async def buscar_por_id(self, mensagem_id: UUID) -> Mensagem | None: ...
+
+    # Últimas mensagens do cliente, mais antiga primeiro — usado pra montar
+    # o histórico de conversa antes de chamar a IA.
+    async def listar_por_cliente(self, cliente_id: UUID, limit: int) -> list[Mensagem]: ...
+
+    async def registrar_resposta(self, mensagem_id: UUID, resposta: str) -> None: ...
+
+    # Regra 4 do CLAUDE.md (reclamação sensível/falha técnica → humano).
+    # marcar_atendimento_resolvido é o staff dando baixa depois de atender.
+    async def marcar_precisa_atendimento(self, mensagem_id: UUID) -> None: ...
+
+    async def marcar_atendimento_resolvido(self, mensagem_id: UUID) -> None: ...
+
+    # Fila do painel de atendimento humano — mais recente primeiro.
+    async def listar_pendentes_atendimento(self) -> list[Mensagem]: ...

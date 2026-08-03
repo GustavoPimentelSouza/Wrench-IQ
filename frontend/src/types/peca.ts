@@ -5,6 +5,7 @@ export interface Peca {
   ano_compativel: string;
   preco: string;
   quantidade_estoque: number;
+  quantidade_minima: number;
   imagem_url: string | null;
   criado_em: string;
 }

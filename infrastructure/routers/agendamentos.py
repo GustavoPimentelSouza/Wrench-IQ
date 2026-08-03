@@ -59,10 +59,14 @@ async def criar_agendamento(
 
 @router.get("", response_model=list[AgendamentoOut])
 async def listar_agendamentos(
-    cliente_id: UUID,
+    cliente_id: UUID | None = None,
     use_cases: AgendamentoUseCases = Depends(get_use_cases),
 ) -> list[Agendamento]:
-    return await use_cases.listar_por_cliente(cliente_id)
+    # Sem cliente_id: visão da oficina inteira (AgendaPage). Com
+    # cliente_id: histórico de um cliente específico (ex: ClientesPage).
+    if cliente_id is not None:
+        return await use_cases.listar_por_cliente(cliente_id)
+    return await use_cases.listar()
 
 
 @router.get("/{agendamento_id}", response_model=AgendamentoOut)

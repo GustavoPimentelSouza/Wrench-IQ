@@ -4,25 +4,16 @@ from uuid import UUID
 from domain.pedido import Pedido, StatusPedido
 
 
-# Repara que não existe `excluir` aqui. Pedido nunca é apagado do banco —
-# só muda de status (ver StatusPedido em domain/pedido.py: CANCELADO é um
-# estado, não uma remoção). Isso preserva histórico de venda mesmo quando
-# algo é cancelado, que é importante pra auditoria e pro direito de
-# arrependimento (CDC, 7 dias).
+# Sem `excluir`: Pedido nunca é apagado, só muda de status (CANCELADO é
+# estado, não remoção) — preserva histórico pra auditoria e arrependimento (CDC).
 class PedidoRepository(Protocol):
     async def criar(self, pedido: Pedido) -> Pedido: ...
 
-    # `status` filtra a "fila de ação" (ex: só aguardando_conferencia).
-    # `limit`/`offset` existem desde já — mesmo com poucas dezenas de
-    # pedidos hoje, é o tipo de coisa que fica muito mais cara de adicionar
-    # depois (muda contrato de API) do que de já nascer certo.
     async def listar(
         self, status: StatusPedido | None = None, limit: int = 50, offset: int = 0
     ) -> list[Pedido]: ...
 
-    # Total de registros que batem no MESMO filtro de `listar` (sem
-    # limit/offset) — usado pra montar paginação no cliente da API (ex:
-    # "mostrando 50 de 230").
+    # Total no mesmo filtro de listar (sem limit/offset), pra paginação.
     async def contar(self, status: StatusPedido | None = None) -> int: ...
 
     async def listar_por_cliente(

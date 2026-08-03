@@ -33,7 +33,7 @@ Na raiz do projeto (não aqui em `frontend/`):
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
-O frontend sobe em `http://localhost:3010`. O `docker-compose.local.yml`
+O frontend sobe em `http://localhost:3011`. O `docker-compose.local.yml`
 monta `src/` e `index.html` como volume, então editar código local reflete
 no container sem rebuild (o Vite já faz hot-reload).
 

@@ -19,6 +19,8 @@ def _to_domain(orm: ProtocoloORM) -> Protocolo:
         mecanico_id=orm.mecanico_id,
         criado_em=orm.criado_em,
         atualizado_em=orm.atualizado_em,
+        valor_orcamento=orm.valor_orcamento,
+        motivo_cancelamento=orm.motivo_cancelamento,
     )
 
 
@@ -36,6 +38,7 @@ class SqlAlchemyProtocoloRepository:
             descricao=protocolo.descricao,
             mecanico_id=protocolo.mecanico_id,
             criado_em=protocolo.criado_em,
+            valor_orcamento=protocolo.valor_orcamento,
         )
         self._session.add(orm)
         await self._session.commit()
@@ -69,6 +72,8 @@ class SqlAlchemyProtocoloRepository:
         orm.status = protocolo.status.value
         orm.descricao = protocolo.descricao
         orm.mecanico_id = protocolo.mecanico_id
+        orm.valor_orcamento = protocolo.valor_orcamento
+        orm.motivo_cancelamento = protocolo.motivo_cancelamento
         await self._session.commit()
         await self._session.refresh(orm)
         return _to_domain(orm)

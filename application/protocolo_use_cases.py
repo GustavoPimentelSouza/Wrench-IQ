@@ -9,7 +9,6 @@ from domain.usuario import PapelUsuario
 class ProtocoloNaoEncontradoError(Exception):
     pass
 
-
 class TransicaoInvalidaError(Exception):
     pass
 
@@ -18,10 +17,11 @@ class MecanicoInvalidoError(Exception):
     """Levantado quando mecanico_id não existe ou não é um usuário com papel=MECANICO."""
 
 
-# Mapa de transição: status atual -> conjunto de status destino permitidos.
-# PRONTO e CANCELADO são estados finais (conjunto vazio, nenhuma saída).
-# Mesma ideia de máquina de estados que StatusPedido já usava em
-# application/pedido_use_cases.py — aqui replicada pra Protocolo.
+class OrcamentoNaoDefinidoError(Exception):
+    """Levantado ao tentar aprovar um protocolo sem valor_orcamento definido."""
+
+
+# status atual -> destinos permitidos. PRONTO/CANCELADO são finais.
 _TRANSICOES_VALIDAS: dict[StatusProtocolo, set[StatusProtocolo]] = {
     StatusProtocolo.AGUARDANDO_APROVACAO: {
         StatusProtocolo.EM_EXECUCAO,
@@ -52,12 +52,7 @@ class ProtocoloUseCases:
         return await self._repository.buscar_por_id(protocolo_id)
 
     async def atualizar(self, protocolo: Protocolo) -> Protocolo | None:
-        # Edição de campos "de cadastro" (veiculo, categoria, descricao,
-        # mecanico_id) — NÃO muda status. O status vem sempre do registro já
-        # existente, ignorando o que tiver em `protocolo.status`, pra
-        # garantir que só aprovar()/concluir()/cancelar() consigam mudar o
-        # estado, mesmo que algum chamador futuro tente passar outra coisa
-        # aqui por engano.
+        # Status sempre vem do registro existente — só aprovar/concluir/cancelar mudam estado.
         existente = await self._repository.buscar_por_id(protocolo.id)
         if existente is None:
             return None
@@ -66,20 +61,31 @@ class ProtocoloUseCases:
         return await self._repository.atualizar(protocolo)
 
     async def aprovar(self, protocolo_id: UUID) -> Protocolo:
-        return await self._transicionar(protocolo_id, StatusProtocolo.EM_EXECUCAO)
+        protocolo = await self._buscar_para_transicao(protocolo_id, StatusProtocolo.EM_EXECUCAO)
+        if protocolo.valor_orcamento is None:
+            raise OrcamentoNaoDefinidoError()
+        return await self._transicionar(protocolo, StatusProtocolo.EM_EXECUCAO)
 
     async def concluir(self, protocolo_id: UUID) -> Protocolo:
-        return await self._transicionar(protocolo_id, StatusProtocolo.PRONTO)
+        protocolo = await self._buscar_para_transicao(protocolo_id, StatusProtocolo.PRONTO)
+        return await self._transicionar(protocolo, StatusProtocolo.PRONTO)
 
-    async def cancelar(self, protocolo_id: UUID) -> Protocolo:
-        return await self._transicionar(protocolo_id, StatusProtocolo.CANCELADO)
+    async def cancelar(self, protocolo_id: UUID, motivo: str | None = None) -> Protocolo:
+        protocolo = await self._buscar_para_transicao(protocolo_id, StatusProtocolo.CANCELADO)
+        protocolo.motivo_cancelamento = motivo
+        return await self._transicionar(protocolo, StatusProtocolo.CANCELADO)
 
-    async def _transicionar(self, protocolo_id: UUID, destino: StatusProtocolo) -> Protocolo:
+    async def _buscar_para_transicao(
+        self, protocolo_id: UUID, destino: StatusProtocolo
+    ) -> Protocolo:
         protocolo = await self._repository.buscar_por_id(protocolo_id)
         if protocolo is None:
             raise ProtocoloNaoEncontradoError()
         if destino not in _TRANSICOES_VALIDAS[protocolo.status]:
             raise TransicaoInvalidaError()
+        return protocolo
+
+    async def _transicionar(self, protocolo: Protocolo, destino: StatusProtocolo) -> Protocolo:
         protocolo.status = destino
         atualizado = await self._repository.atualizar(protocolo)
         assert atualizado is not None

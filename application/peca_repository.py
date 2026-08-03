@@ -17,6 +17,10 @@ class PecaRepository(Protocol):
 
     async def buscar_por_id(self, peca_id: UUID) -> Peca | None: ...
 
+    # Usado pela ferramenta de tool calling "consultar_preco_peca" — busca
+    # livre por nome, sem RAG/pgvector ainda (isso é etapa futura do CLAUDE.md).
+    async def buscar_por_nome_aproximado(self, texto: str) -> list[Peca]: ...
+
     async def atualizar(self, peca: Peca) -> Peca | None: ...
 
     # Levanta PecaPossuiPedidosError se a peça ainda tem pedido vinculado

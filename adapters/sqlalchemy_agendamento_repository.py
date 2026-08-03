@@ -34,6 +34,12 @@ class SqlAlchemyAgendamentoRepository:
         await self._session.refresh(orm)
         return _to_domain(orm)
 
+    async def listar(self) -> list[Agendamento]:
+        result = await self._session.execute(
+            select(AgendamentoORM).order_by(AgendamentoORM.data_hora)
+        )
+        return [_to_domain(orm) for orm in result.scalars().all()]
+
     async def listar_por_cliente(self, cliente_id: UUID) -> list[Agendamento]:
         result = await self._session.execute(
             select(AgendamentoORM)

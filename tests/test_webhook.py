@@ -16,7 +16,7 @@ def _payload_com_telefone_unico(nome_exemplo: str) -> dict:
     return payload
 
 
-async def test_webhook_retorna_mensagem_recebida(client):
+async def test_webhook_retorna_resposta_da_ia(client):
     telefone = f"5599{uuid.uuid4().int % 100000000:08d}"
 
     resposta = await client.post(
@@ -24,7 +24,13 @@ async def test_webhook_retorna_mensagem_recebida(client):
     )
 
     assert resposta.status_code == 200
-    assert resposta.json() == {"resposta": "recebi sua mensagem: teste"}
+    # FakeChatService (tests/fakes.py) não chama IA de verdade — só confirma
+    # que o webhook está repassando a resposta do ChatService, não mais o eco.
+    assert resposta.json() == {
+        "resposta": "[fake-ia] resposta para: teste",
+        "ferramentas_chamadas": [],
+        "imagem_url": None,
+    }
 
 
 async def test_webhook_cria_cliente_novo_e_persiste_mensagem(client):

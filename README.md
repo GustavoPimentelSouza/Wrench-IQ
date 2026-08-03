@@ -3,8 +3,64 @@
 Etapa atual: modelos de `Peca`, `Usuario`, `Mensagem`, `Protocolo`,
 `Cliente` e `Pedido` (venda direta de peça) com persistência em Postgres via
 SQLAlchemy assíncrono + Alembic, seguindo Clean Architecture, mais um painel
-administrativo (SQLAdmin) em `/admin`. WhatsApp/IA ainda não estão
-integrados — de propósito, por enquanto.
+administrativo (SQLAdmin) em `/admin` e um assistente de IA via tool calling
+(consulta de peça, criação de pedido) com busca semântica (`pgvector`).
+WhatsApp de verdade (Evolution API) ainda não está integrado — de propósito,
+por enquanto.
+
+## Comandos do dia a dia
+
+Essa seção é só isso: o comando, quando usar, e por quê. Pra referência de
+endpoints da API, veja "Endpoints" mais abaixo.
+
+### Subir o projeto
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+```
+Use esse na maioria das vezes — sobe API, frontend, Postgres e pgAdmin,
+reaproveitando as imagens já existentes.
+
+### Subir com rebuild
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+```
+Só quando `requirements.txt`, `frontend/package.json` ou algum `Dockerfile`
+mudar. Código Python/TypeScript puro recarrega sozinho (hot-reload) — rebuild
+sem necessidade só acumula imagem órfã e gasta espaço em disco à toa.
+
+### Parar o projeto
+```bash
+docker compose down
+```
+Derruba os containers, mas preserva os dados do banco (volume
+`wrenchiq_postgres_data`). Nunca use `-v` a menos que queira apagar o banco
+de propósito.
+
+### Aplicar migração nova
+```bash
+docker exec wrenchiq_api alembic upgrade head
+```
+Roda toda vez que aparecer um arquivo novo em `alembic/versions/` (uma
+coluna ou tabela nova). Sem isso, a API sobe normalmente mas quebra assim
+que tentar usar algo que ainda não existe no banco.
+
+### Rodar os testes
+```bash
+source venv/bin/activate
+pytest
+```
+Roda contra o banco `wrenchiq_test` — separado do banco de desenvolvimento
+(configurado em `.env.test`), e é limpo automaticamente antes e depois de
+cada rodada (ver `tests/conftest.py`). Nunca suja o que aparece no
+painel/site de verdade.
+
+### Limpar imagem Docker órfã
+```bash
+docker image prune -f
+```
+Só remove imagem sem uso (não afeta outros projetos Docker na mesma
+máquina) — vale rodar de vez em quando depois de um `--build`, se o espaço
+em disco for curto.
 
 ## Estrutura
 
@@ -44,7 +100,7 @@ iniciar o servidor, aplicando as migrações (tabelas `pecas`, `usuarios`,
 são FKs de verdade em todas as tabelas relacionadas, com `RESTRICT` contra
 exclusão que perderia histórico).
 
-A API sobe em `http://localhost:8010`, o frontend em `http://localhost:3010`.
+A API sobe em `http://localhost:8010`, o frontend em `http://localhost:3011`.
 O Postgres (imagem `pgvector/pgvector:pg15`) sobe junto na porta `5433`.
 
 Login inicial do painel web (semeado pela migração `0004`, mesmas
@@ -232,22 +288,29 @@ configuração em produção.
 
 ## Testes
 
-Os testes usam o banco definido em `DATABASE_URL_TEST`. Essa variável tem
-um valor padrão em `.env.test` (`postgresql+asyncpg://wrenchiq:wrenchiq@localhost:5433/wrenchiq`),
-carregado automaticamente pelo `conftest.py` na raiz — sem sobrescrever a
-variável quando ela já vem definida (caso do container, que aponta para
-`postgres:5432`). Em ambos os casos é o mesmo Postgres (`wrenchiq_postgres`),
-só muda o host:porta de acesso — então o Postgres do `docker compose` precisa
-estar de pé (com as migrações já aplicadas) para os testes passarem em
-qualquer um dos dois fluxos abaixo.
+Os testes usam o banco definido em `DATABASE_URL_TEST` — um banco **separado**
+do de desenvolvimento (`wrenchiq_test`, não `wrenchiq`), no mesmo Postgres
+(`wrenchiq_postgres`). Isso existe porque, sem isolamento, cada rodada de
+`pytest` cria Cliente/Peça/Usuário/Mensagem de teste que vazavam direto pro
+banco que o painel web mostra. `tests/conftest.py` também limpa todas as
+tabelas (menos o usuário admin semeado) antes e depois de cada rodada — o
+banco de teste começa e termina vazio sempre.
 
-Testes que envolvem `/mensagens`/`/webhook` usam um `FakeClassificador`
-(`tests/fakes.py`) no lugar da IA real (Groq) — sem custo, sem chave de
-API, sem rede. Isso é feito sobrescrevendo `infrastructure.ia.get_classificador`
-em `tests/conftest.py`. Existe **um** teste que chama o Groq de verdade
-(`tests/test_groq_integracao_real.py`), marcado `@pytest.mark.integracao_real`
-e **excluído do `pytest` padrão** (via `addopts` em `pytest.ini`). Pra
-validar a integração de fato (precisa de `GROQ_API_KEY` configurada):
+Se for a primeira vez rodando, o banco `wrenchiq_test` precisa existir e ter
+as migrações aplicadas:
+```bash
+docker exec wrenchiq_postgres psql -U wrenchiq -d wrenchiq -c "CREATE DATABASE wrenchiq_test"
+DB_HOST=localhost DB_PORT=5433 DB_NAME=wrenchiq_test alembic upgrade head
+```
+
+Testes que envolvem `/mensagens`/`/webhook` usam fakes (`tests/fakes.py`) no
+lugar da IA real (Groq/Gemini) — sem custo, sem chave de API, sem rede. Isso
+é feito sobrescrevendo `infrastructure.ia.get_classificador`,
+`get_chat_service` e `get_embedding_service` em `tests/conftest.py`. Existe
+**um** teste que chama o Groq de verdade (`tests/test_groq_integracao_real.py`),
+marcado `@pytest.mark.integracao_real` e **excluído do `pytest` padrão** (via
+`addopts` em `pytest.ini`). Pra validar a integração de fato (precisa de
+`GROQ_API_KEY` configurada):
 
 ```
 pytest -m integracao_real -o addopts="" tests/test_groq_integracao_real.py

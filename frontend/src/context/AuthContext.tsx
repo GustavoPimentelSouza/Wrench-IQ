@@ -9,6 +9,7 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const CHAVE_TOKEN = "wrenchiq_token";
 
 function decodificarUsuarioDoToken(token: string): UsuarioAutenticado | null {
   try {
@@ -22,15 +23,22 @@ function decodificarUsuarioDoToken(token: string): UsuarioAutenticado | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
-  const [usuario, setUsuario] = useState<UsuarioAutenticado | null>(null);
+  // Lido de localStorage na inicialização — sem isso, todo F5 desloga,
+  // mesmo com o token ainda válido.
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(CHAVE_TOKEN));
+  const [usuario, setUsuario] = useState<UsuarioAutenticado | null>(() => {
+    const tokenSalvo = localStorage.getItem(CHAVE_TOKEN);
+    return tokenSalvo ? decodificarUsuarioDoToken(tokenSalvo) : null;
+  });
 
   function login(novoToken: string) {
+    localStorage.setItem(CHAVE_TOKEN, novoToken);
     setToken(novoToken);
     setUsuario(decodificarUsuarioDoToken(novoToken));
   }
 
   function logout() {
+    localStorage.removeItem(CHAVE_TOKEN);
     setToken(null);
     setUsuario(null);
   }

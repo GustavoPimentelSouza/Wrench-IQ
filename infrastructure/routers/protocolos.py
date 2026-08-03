@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,6 +10,7 @@ from adapters.sqlalchemy_protocolo_repository import SqlAlchemyProtocoloReposito
 from adapters.sqlalchemy_usuario_repository import SqlAlchemyUsuarioRepository
 from application.protocolo_use_cases import (
     MecanicoInvalidoError,
+    OrcamentoNaoDefinidoError,
     ProtocoloNaoEncontradoError,
     ProtocoloUseCases,
     TransicaoInvalidaError,
@@ -27,10 +29,7 @@ class ProtocoloCreate(BaseModel):
     categoria: str
     descricao: str | None = None
     mecanico_id: UUID | None = None
-    # Sem campo `status` aqui — todo protocolo nasce em AGUARDANDO_APROVACAO,
-    # sem exceção. Deixar o cliente da API escolher o status inicial
-    # permitiria pular a máquina de estados na criação (ex: já nascer
-    # "pronto").
+    # Sem `status`: todo protocolo nasce em AGUARDANDO_APROVACAO.
 
 
 class ProtocoloUpdate(BaseModel):
@@ -38,8 +37,13 @@ class ProtocoloUpdate(BaseModel):
     categoria: str
     descricao: str | None = None
     mecanico_id: UUID | None = None
+    valor_orcamento: Decimal | None = None
     # Também sem `status` — mudar de estado só é possível pelos endpoints
     # /aprovar, /concluir, /cancelar abaixo.
+
+
+class ProtocoloCancelamento(BaseModel):
+    motivo: str | None = None
 
 
 class ProtocoloOut(BaseModel):
@@ -53,6 +57,8 @@ class ProtocoloOut(BaseModel):
     mecanico_id: UUID | None
     criado_em: datetime
     atualizado_em: datetime
+    valor_orcamento: Decimal | None
+    motivo_cancelamento: str | None
 
 
 def get_use_cases(session: AsyncSession = Depends(get_db)) -> ProtocoloUseCases:
@@ -126,6 +132,7 @@ async def atualizar_protocolo(
         descricao=payload.descricao,
         mecanico_id=payload.mecanico_id,
         criado_em=existente.criado_em,
+        valor_orcamento=payload.valor_orcamento,
     )
     try:
         atualizada = await use_cases.atualizar(protocolo)
@@ -153,6 +160,10 @@ async def aprovar_protocolo(
         raise HTTPException(
             status_code=409, detail="Protocolo não está aguardando aprovação"
         )
+    except OrcamentoNaoDefinidoError:
+        raise HTTPException(
+            status_code=409, detail="Protocolo não tem valor_orcamento definido"
+        )
 
 
 @router.post("/{protocolo_id}/concluir", response_model=ProtocoloOut)
@@ -172,11 +183,12 @@ async def concluir_protocolo(
 @router.post("/{protocolo_id}/cancelar", response_model=ProtocoloOut)
 async def cancelar_protocolo(
     protocolo_id: UUID,
+    payload: ProtocoloCancelamento = ProtocoloCancelamento(),
     use_cases: ProtocoloUseCases = Depends(get_use_cases),
     _usuario: Usuario = Depends(get_current_user),
 ) -> Protocolo:
     try:
-        return await use_cases.cancelar(protocolo_id)
+        return await use_cases.cancelar(protocolo_id, payload.motivo)
     except ProtocoloNaoEncontradoError:
         raise HTTPException(status_code=404, detail="Protocolo não encontrado")
     except TransicaoInvalidaError:

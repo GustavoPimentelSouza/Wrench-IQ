@@ -4,11 +4,7 @@ from application.peca_repository import PecaRepository
 from domain.peca import Peca
 
 
-# Mesmo padrão de ClienteUseCases — puro CRUD delegado, com o "buscar antes
-# de atualizar" como única lógica própria. Repara que NÃO tem nenhuma regra
-# de "não deixar quantidade_estoque negativa" aqui: essa validação mora em
-# PedidoUseCases (quem de fato vende peça), não aqui. Isso é proposital —
-# PecaUseCases é sobre cadastro/manutenção do catálogo, não sobre venda.
+# CRUD de catálogo. Validação de estoque fica em PedidoUseCases, não aqui.
 class PecaUseCases:
     def __init__(self, repository: PecaRepository):
         self._repository = repository
@@ -21,6 +17,9 @@ class PecaUseCases:
 
     async def buscar_por_id(self, peca_id: UUID) -> Peca | None:
         return await self._repository.buscar_por_id(peca_id)
+
+    async def buscar_por_nome_aproximado(self, texto: str) -> list[Peca]:
+        return await self._repository.buscar_por_nome_aproximado(texto)
 
     async def atualizar(self, peca: Peca) -> Peca | None:
         existente = await self._repository.buscar_por_id(peca.id)

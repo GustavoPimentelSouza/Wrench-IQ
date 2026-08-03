@@ -7,9 +7,11 @@ from domain.agendamento import Agendamento
 class AgendamentoRepository(Protocol):
     async def criar(self, agendamento: Agendamento) -> Agendamento: ...
 
-    # Não existe "listar" geral (todos os agendamentos de todos os
-    # clientes) — só por cliente. Reflete o único caso de uso que existe
-    # hoje (ver a rota GET /agendamentos, que exige ?cliente_id= sempre).
+    # Todos os agendamentos, de todos os clientes — usado pela AgendaPage
+    # (visão da oficina inteira). Sem isso, um agendamento criado pela IA
+    # via chat ficava invisível pro time, só consultável por cliente.
+    async def listar(self) -> list[Agendamento]: ...
+
     async def listar_por_cliente(self, cliente_id: UUID) -> list[Agendamento]: ...
 
     async def buscar_por_id(self, agendamento_id: UUID) -> Agendamento | None: ...

@@ -11,6 +11,7 @@ from adapters.sqlalchemy_movimentacao_estoque_repository import (
 )
 from adapters.sqlalchemy_peca_repository import SqlAlchemyPecaRepository
 from adapters.sqlalchemy_pedido_repository import SqlAlchemyPedidoRepository
+from application.embedding_service import EmbeddingService
 from application.pedido_use_cases import (
     EnderecoObrigatorioError,
     EstoqueInsuficienteError,
@@ -22,6 +23,7 @@ from application.pedido_use_cases import (
 from domain.pedido import Pedido, StatusPedido, TipoEntrega
 from domain.usuario import Usuario
 from infrastructure.db import get_db
+from infrastructure.ia import get_embedding_service
 from infrastructure.security_dependencies import get_current_user
 
 router = APIRouter(prefix="/pedidos", tags=["pedidos"])
@@ -76,10 +78,13 @@ def _para_saida(pedido: Pedido) -> PedidoOut:
     )
 
 
-def get_use_cases(session: AsyncSession = Depends(get_db)) -> PedidoUseCases:
+def get_use_cases(
+    session: AsyncSession = Depends(get_db),
+    embedding_service: EmbeddingService = Depends(get_embedding_service),
+) -> PedidoUseCases:
     return PedidoUseCases(
         SqlAlchemyPedidoRepository(session),
-        SqlAlchemyPecaRepository(session),
+        SqlAlchemyPecaRepository(session, embedding_service),
         SqlAlchemyMovimentacaoEstoqueRepository(session),
     )
 
@@ -216,3 +221,15 @@ async def cancelar_pedido(
     except TransicaoInvalidaError:
         raise HTTPException(status_code=409, detail="Pedido não pode mais ser cancelado")
     return _para_saida(pedido)
+
+
+# Sem agendador/fila no projeto ainda — o frontend chama essa rota toda vez
+# que a tela de Pedidos carrega (ver PedidosPage.tsx), funcionando como uma
+# limpeza "preguiçosa" em vez de um job rodando sozinho em segundo plano.
+@router.post("/expirar-retiradas", response_model=list[PedidoOut])
+async def expirar_retiradas(
+    use_cases: PedidoUseCases = Depends(get_use_cases),
+    _usuario: Usuario = Depends(get_current_user),
+) -> list[PedidoOut]:
+    cancelados = await use_cases.cancelar_expirados()
+    return [_para_saida(pedido) for pedido in cancelados]

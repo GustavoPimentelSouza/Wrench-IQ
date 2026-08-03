@@ -64,6 +64,19 @@ async def test_ciclo_completo_protocolo_aprovar_e_concluir(client):
     assert resposta_busca.status_code == 200
     assert resposta_busca.json()["veiculo"] == "Onix 2022"
 
+    # Sem valor_orcamento definido, aprovar deve recusar.
+    resposta_aprovar_sem_orcamento = await client.post(
+        f"/protocolos/{protocolo_id}/aprovar", headers=headers
+    )
+    assert resposta_aprovar_sem_orcamento.status_code == 409
+
+    resposta_orcamento = await client.put(
+        f"/protocolos/{protocolo_id}",
+        json={"veiculo": "Onix 2022", "categoria": "farol", "valor_orcamento": "350.00"},
+        headers=headers,
+    )
+    assert resposta_orcamento.status_code == 200
+
     resposta_aprovar = await client.post(
         f"/protocolos/{protocolo_id}/aprovar", headers=headers
     )
@@ -126,6 +139,27 @@ async def test_cancelar_protocolo_preserva_registro(client):
         f"/protocolos/{protocolo_id}/aprovar", headers=headers
     )
     assert resposta_aprovar.status_code == 409
+
+
+async def test_cancelar_protocolo_com_motivo(client):
+    token = await _obter_token_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    cliente_id = await _criar_cliente("Cliente")
+
+    resposta_criacao = await client.post(
+        "/protocolos",
+        json={"cliente_id": cliente_id, "veiculo": "HB20 2021", "categoria": "retirar"},
+        headers=headers,
+    )
+    protocolo_id = resposta_criacao.json()["id"]
+
+    resposta_cancelar = await client.post(
+        f"/protocolos/{protocolo_id}/cancelar",
+        json={"motivo": "cliente desistiu"},
+        headers=headers,
+    )
+    assert resposta_cancelar.status_code == 200
+    assert resposta_cancelar.json()["motivo_cancelamento"] == "cliente desistiu"
 
 
 async def test_criar_protocolo_sem_token_retorna_401(client):

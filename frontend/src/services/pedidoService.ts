@@ -79,3 +79,20 @@ export const marcarEntregue = (id: string, token: string) =>
 
 export const cancelarPedido = (id: string, token: string) =>
   transicao(id, "cancelar", token);
+
+// Sem agendador no backend ainda — chamado toda vez que a tela de Pedidos
+// carrega (ver PedidosPage.tsx), funcionando como uma limpeza "preguiçosa":
+// cancela sozinho reserva de retirada local vencida, devolvendo a peça pro
+// estoque, em vez de um job rodando em segundo plano.
+export async function expirarRetiradas(token: string): Promise<Pedido[]> {
+  const resposta = await fetch(`${API_BASE_URL}/pedidos/expirar-retiradas`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!resposta.ok) {
+    return extrairErro(resposta, "Não foi possível verificar retiradas expiradas.");
+  }
+
+  return resposta.json();
+}

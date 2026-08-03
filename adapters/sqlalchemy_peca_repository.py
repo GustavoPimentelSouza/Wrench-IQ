@@ -5,15 +5,20 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.orm_models import PecaORM
+from application.embedding_service import EmbeddingService
 from application.peca_repository import PecaPossuiPedidosError
 from domain.peca import Peca
 
+# Acima disso, cosine_distance indica "não é a mesma coisa" — calibrado
+# testando uma busca sem correspondência real no catálogo (~0.43-0.46)
+# contra uma busca com correspondência boa (~0.22-0.26). Sem esse corte, a
+# busca sempre devolvia o item "menos distante" mesmo quando nada no
+# catálogo tinha a ver com o que o cliente pediu.
+_LIMITE_DISTANCIA_SEMANTICA = 0.35
 
-# Isso aqui é o que faz esse arquivo ser um "adapter": traduz entre o mundo
-# do SQLAlchemy (PecaORM, ligado ao banco) e o mundo puro do domínio (Peca,
-# um dataclass sem dependência nenhuma). O resto do app (use cases, routers)
-# só enxerga `Peca` — nunca importa PecaORM diretamente. Se um dia trocar
-# Postgres por outro banco, só esse arquivo muda.
+
+# Traduz PecaORM (SQLAlchemy) <-> Peca (domínio puro). Só esse arquivo
+# conhece PecaORM.
 def _to_domain(orm: PecaORM) -> Peca:
     return Peca(
         id=orm.id,
@@ -28,11 +33,17 @@ def _to_domain(orm: PecaORM) -> Peca:
     )
 
 
+def _texto_busca(peca: Peca) -> str:
+    return f"{peca.nome} {peca.marca_modelo_compativel} {peca.ano_compativel}"
+
+
 class SqlAlchemyPecaRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, embedding_service: EmbeddingService):
         self._session = session
+        self._embeddings = embedding_service
 
     async def criar(self, peca: Peca) -> Peca:
+        embedding = await self._embeddings.gerar_embedding(_texto_busca(peca))
         orm = PecaORM(
             id=peca.id,
             nome=peca.nome,
@@ -43,14 +54,11 @@ class SqlAlchemyPecaRepository:
             imagem_url=peca.imagem_url,
             quantidade_minima=peca.quantidade_minima,
             criado_em=peca.criado_em,
+            embedding=embedding,
         )
         self._session.add(orm)
         await self._session.commit()
-        # refresh() recarrega o objeto a partir do banco depois do commit —
-        # necessário pra pegar valores que o Postgres gera sozinho (aqui é
-        # só o default de criado_em, mas em Protocolo/Pedido é assim que o
-        # `numero` sequencial, gerado por Identity(), volta pro Python).
-        await self._session.refresh(orm)
+        await self._session.refresh(orm)  # recarrega valores gerados pelo banco
         return _to_domain(orm)
 
     async def listar(self) -> list[Peca]:
@@ -60,6 +68,25 @@ class SqlAlchemyPecaRepository:
     async def buscar_por_id(self, peca_id: UUID) -> Peca | None:
         orm = await self._session.get(PecaORM, peca_id)
         return _to_domain(orm) if orm else None
+
+    async def buscar_por_nome_aproximado(self, texto: str) -> list[Peca]:
+        # Busca semântica (pgvector): compara o SIGNIFICADO da descrição do
+        # cliente com o das peças cadastradas, em vez de bater substring
+        # literal — "paralama pra fan 160" e "para-lama de uma honda 160
+        # fan" viram vetores parecidos mesmo sem nenhuma palavra em comum, e
+        # "vela" nunca fica próximo de "paralama". Substituiu a busca por
+        # palavra-chave (ILIKE), que não generalizava pras várias formas
+        # diferentes que um cliente pergunta a mesma coisa.
+        vetor_busca = await self._embeddings.gerar_embedding(texto)
+        distancia = PecaORM.embedding.cosine_distance(vetor_busca)
+        result = await self._session.execute(
+            select(PecaORM)
+            .where(PecaORM.embedding.isnot(None))
+            .where(distancia < _LIMITE_DISTANCIA_SEMANTICA)
+            .order_by(distancia)
+            .limit(5)
+        )
+        return [_to_domain(orm) for orm in result.scalars().all()]
 
     async def atualizar(self, peca: Peca) -> Peca | None:
         orm = await self._session.get(PecaORM, peca.id)
@@ -72,6 +99,7 @@ class SqlAlchemyPecaRepository:
         orm.quantidade_estoque = peca.quantidade_estoque
         orm.imagem_url = peca.imagem_url
         orm.quantidade_minima = peca.quantidade_minima
+        orm.embedding = await self._embeddings.gerar_embedding(_texto_busca(peca))
         await self._session.commit()
         await self._session.refresh(orm)
         return _to_domain(orm)
@@ -84,12 +112,7 @@ class SqlAlchemyPecaRepository:
         try:
             await self._session.commit()
         except IntegrityError as erro:
-            # O banco (não o Python) é quem realmente impede a exclusão —
-            # a FK de Pedido pra Peca foi criada com ondelete="RESTRICT"
-            # (ver adapters/orm_models.py). Aqui só traduzimos o erro cru do
-            # Postgres pra uma exceção com significado de negócio, que o
-            # router sabe transformar num 409 (ver infrastructure/routers/
-            # pecas.py). Sem isso, o cliente da API veria um 500 genérico.
+            # FK Pedido->Peca com ondelete=RESTRICT; traduz pro router virar 409.
             await self._session.rollback()
             raise PecaPossuiPedidosError() from erro
         return True

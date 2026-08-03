@@ -6,6 +6,7 @@ from infrastructure.routers import (
     agendamentos,
     auth,
     clientes,
+    configuracao_oficina,
     mensagens,
     movimentacoes_estoque,
     pecas,
@@ -19,7 +20,7 @@ app = FastAPI(title="Wrench IQ")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3010", "http://localhost:5173"],
+    allow_origins=["http://localhost:3011", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,5 +36,6 @@ app.include_router(pedidos.router)
 app.include_router(veiculos.router)
 app.include_router(agendamentos.router)
 app.include_router(movimentacoes_estoque.router)
+app.include_router(configuracao_oficina.router)
 
 registrar_admin(app)

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -10,7 +10,9 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Time,
 )
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -39,6 +41,10 @@ class PecaORM(Base):
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    # Vetor de "nome + marca_modelo_compativel + ano_compativel", gerado ao
+    # criar/atualizar a peça (ver sqlalchemy_peca_repository.py) — é o que
+    # permite buscar por significado, não só por substring literal.
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
 
 
 class UsuarioORM(Base):
@@ -79,6 +85,13 @@ class MensagemORM(Base):
     categoria: Mapped[str] = mapped_column(String, nullable=False)
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    resposta_ia: Mapped[str | None] = mapped_column(String, nullable=True)
+    precisa_atendimento_humano: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    atendimento_resolvido: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
 
 
@@ -129,6 +142,8 @@ class ProtocoloORM(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    valor_orcamento: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    motivo_cancelamento: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class PedidoORM(Base):
@@ -218,3 +233,15 @@ class MovimentacaoEstoqueORM(Base):
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+
+class ConfiguracaoOficinaORM(Base):
+    __tablename__ = "configuracao_oficina"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    horario_semana_abertura: Mapped[time] = mapped_column(Time, nullable=False)
+    horario_semana_fechamento: Mapped[time] = mapped_column(Time, nullable=False)
+    horario_sabado_abertura: Mapped[time | None] = mapped_column(Time, nullable=True)
+    horario_sabado_fechamento: Mapped[time | None] = mapped_column(Time, nullable=True)
+    horario_domingo_abertura: Mapped[time | None] = mapped_column(Time, nullable=True)
+    horario_domingo_fechamento: Mapped[time | None] = mapped_column(Time, nullable=True)

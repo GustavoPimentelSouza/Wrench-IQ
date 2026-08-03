@@ -9,6 +9,7 @@ from adapters.sqlalchemy_movimentacao_estoque_repository import (
     SqlAlchemyMovimentacaoEstoqueRepository,
 )
 from adapters.sqlalchemy_peca_repository import SqlAlchemyPecaRepository
+from application.embedding_service import EmbeddingService
 from application.movimentacao_estoque_use_cases import (
     EstoqueInsuficienteError,
     MovimentacaoEstoqueUseCases,
@@ -17,6 +18,7 @@ from application.movimentacao_estoque_use_cases import (
 from domain.movimentacao_estoque import MovimentacaoEstoque, TipoMovimentacao
 from domain.usuario import Usuario
 from infrastructure.db import get_db
+from infrastructure.ia import get_embedding_service
 from infrastructure.security_dependencies import get_current_user
 
 router = APIRouter(prefix="/movimentacoes-estoque", tags=["movimentacoes-estoque"])
@@ -36,9 +38,13 @@ class MovimentacaoEstoqueOut(BaseModel):
     criado_em: datetime
 
 
-def get_use_cases(session: AsyncSession = Depends(get_db)) -> MovimentacaoEstoqueUseCases:
+def get_use_cases(
+    session: AsyncSession = Depends(get_db),
+    embedding_service: EmbeddingService = Depends(get_embedding_service),
+) -> MovimentacaoEstoqueUseCases:
     return MovimentacaoEstoqueUseCases(
-        SqlAlchemyMovimentacaoEstoqueRepository(session), SqlAlchemyPecaRepository(session)
+        SqlAlchemyMovimentacaoEstoqueRepository(session),
+        SqlAlchemyPecaRepository(session, embedding_service),
     )
 
 
