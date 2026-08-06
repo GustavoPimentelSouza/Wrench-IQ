@@ -2,6 +2,7 @@ services:
   api:
     build: .
     container_name: wrenchiq_api
+    restart: unless-stopped
     ports:
       - "8010:8000"
     environment:
@@ -15,7 +16,9 @@ services:
       ADMIN_SECRET_KEY: wrenchiq-dev-secret
       DATABASE_URL_TEST: postgresql+asyncpg://wrenchiq:wrenchiq@postgres:5432/wrenchiq_test
       JWT_SECRET_KEY: wrenchiq-dev-jwt-secret
-      JWT_EXPIRA_MINUTOS: "60"
+      # 30 dias — bem mais que o padrão (60 min), só pra não deslogar no
+      # meio dos testes. Valor de dev; produção deve voltar pra algo curto.
+      JWT_EXPIRA_MINUTOS: "43200"
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     depends_on:
@@ -27,6 +30,7 @@ services:
   frontend:
     build: ./frontend
     container_name: wrenchiq_frontend
+    restart: unless-stopped
     ports:
       - "3011:3000"
     networks:
@@ -35,6 +39,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg15
     container_name: wrenchiq_postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: wrenchiq
       POSTGRES_PASSWORD: wrenchiq

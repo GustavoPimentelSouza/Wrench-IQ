@@ -8,6 +8,7 @@ from domain.configuracao_oficina import ConfiguracaoOficina
 # às configurações.
 _PADRAO = ConfiguracaoOficina(
     id=1,
+    nome_empresa="Oficina",
     horario_semana_abertura=time(8, 0),
     horario_semana_fechamento=time(19, 0),
     horario_sabado_abertura=time(8, 0),
@@ -26,6 +27,8 @@ class ConfiguracaoOficinaUseCases:
         return configuracao if configuracao is not None else _PADRAO
 
     async def atualizar(self, configuracao: ConfiguracaoOficina) -> ConfiguracaoOficina:
+        if not configuracao.nome_empresa.strip():
+            raise ValueError("Nome da empresa não pode ficar vazio")
         _validar_periodo(configuracao.horario_semana_abertura, configuracao.horario_semana_fechamento)
         _validar_periodo(configuracao.horario_sabado_abertura, configuracao.horario_sabado_fechamento)
         _validar_periodo(configuracao.horario_domingo_abertura, configuracao.horario_domingo_fechamento)

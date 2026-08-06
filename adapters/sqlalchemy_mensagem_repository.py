@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.orm_models import MensagemORM
-from domain.mensagem import CategoriaMensagem, Mensagem
+from domain.mensagem import CategoriaMensagem, Mensagem, MotivoAtendimento
 
 
 def _to_domain(orm: MensagemORM) -> Mensagem:
@@ -16,6 +16,9 @@ def _to_domain(orm: MensagemORM) -> Mensagem:
         criado_em=orm.criado_em,
         resposta_ia=orm.resposta_ia,
         precisa_atendimento_humano=orm.precisa_atendimento_humano,
+        motivo_atendimento=(
+            MotivoAtendimento(orm.motivo_atendimento) if orm.motivo_atendimento else None
+        ),
         atendimento_resolvido=orm.atendimento_resolvido,
     )
 
@@ -32,6 +35,9 @@ class SqlAlchemyMensagemRepository:
             categoria=mensagem.categoria.value,
             criado_em=mensagem.criado_em,
             precisa_atendimento_humano=mensagem.precisa_atendimento_humano,
+            motivo_atendimento=(
+                mensagem.motivo_atendimento.value if mensagem.motivo_atendimento else None
+            ),
         )
         self._session.add(orm)
         await self._session.commit()
@@ -62,11 +68,14 @@ class SqlAlchemyMensagemRepository:
     # orm is None é silencioso (não levanta erro) igual registrar_resposta
     # acima — mesmo padrão já usado no projeto pra "marcar algo que já
     # pode ter sumido" sem quebrar o fluxo de quem chamou.
-    async def marcar_precisa_atendimento(self, mensagem_id: UUID) -> None:
+    async def marcar_precisa_atendimento(
+        self, mensagem_id: UUID, motivo: MotivoAtendimento
+    ) -> None:
         orm = await self._session.get(MensagemORM, mensagem_id)
         if orm is None:
             return
         orm.precisa_atendimento_humano = True
+        orm.motivo_atendimento = motivo.value
         await self._session.commit()
 
     async def marcar_atendimento_resolvido(self, mensagem_id: UUID) -> None:

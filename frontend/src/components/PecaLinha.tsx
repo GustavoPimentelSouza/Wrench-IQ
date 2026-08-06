@@ -12,6 +12,7 @@ function paraFormulario(peca: Peca): PecaCreateInput {
     preco: peca.preco,
     quantidade_estoque: peca.quantidade_estoque,
     imagem_url: peca.imagem_url ?? "",
+    cor: peca.cor ?? "",
   };
 }
 
@@ -123,6 +124,7 @@ export function PecaLinha({ peca, onAtualizada }: PecaLinhaProps) {
         <p className="font-medium text-gray-900">{peca.nome}</p>
         <p className="text-sm text-gray-500">
           {peca.marca_modelo_compativel} · {peca.ano_compativel}
+          {peca.cor ? ` · ${peca.cor}` : ""}
         </p>
         {erro && <p className="text-sm text-red-700">{erro}</p>}
       </div>

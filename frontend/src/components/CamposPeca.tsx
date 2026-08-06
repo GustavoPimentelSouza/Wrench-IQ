@@ -51,6 +51,12 @@ export function CamposPeca({ valores, aoMudar }: CamposPecaProps) {
         className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#1a2332] focus:outline-none"
       />
       <input
+        value={valores.cor ?? ""}
+        onChange={(evento) => aoMudar({ ...valores, cor: evento.target.value })}
+        placeholder="Cor (opcional — deixe em branco se a peça não varia por cor)"
+        className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#1a2332] focus:outline-none"
+      />
+      <input
         value={valores.imagem_url ?? ""}
         onChange={(evento) => aoMudar({ ...valores, imagem_url: evento.target.value })}
         placeholder="URL da imagem (opcional)"

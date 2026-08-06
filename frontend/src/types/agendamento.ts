@@ -6,4 +6,5 @@ export interface Agendamento {
   data_hora: string;
   status: StatusAgendamento;
   criado_em: string;
+  descricao: string | null;
 }

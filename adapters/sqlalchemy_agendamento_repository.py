@@ -14,6 +14,7 @@ def _to_domain(orm: AgendamentoORM) -> Agendamento:
         data_hora=orm.data_hora,
         status=StatusAgendamento(orm.status),
         criado_em=orm.criado_em,
+        descricao=orm.descricao,
     )
 
 
@@ -28,6 +29,7 @@ class SqlAlchemyAgendamentoRepository:
             data_hora=agendamento.data_hora,
             status=agendamento.status.value,
             criado_em=agendamento.criado_em,
+            descricao=agendamento.descricao,
         )
         self._session.add(orm)
         await self._session.commit()
@@ -58,6 +60,7 @@ class SqlAlchemyAgendamentoRepository:
             return None
         orm.data_hora = agendamento.data_hora
         orm.status = agendamento.status.value
+        orm.descricao = agendamento.descricao
         await self._session.commit()
         await self._session.refresh(orm)
         return _to_domain(orm)

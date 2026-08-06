@@ -17,3 +17,6 @@ class Peca:
     criado_em: datetime
     imagem_url: str | None = None
     quantidade_minima: int = 0  # 0 = sem alerta de estoque baixo configurado
+    # None = peça não tem variação de cor (ex: vela, cabo) — nem toda peça
+    # tem, por isso opcional, não um valor tipo "sem cor" fixo.
+    cor: str | None = None

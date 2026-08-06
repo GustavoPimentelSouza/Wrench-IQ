@@ -11,6 +11,7 @@ const CAMPOS_VAZIOS: PecaCreateInput = {
   preco: "",
   quantidade_estoque: 0,
   imagem_url: "",
+  cor: "",
 };
 
 interface PecaFormularioProps {

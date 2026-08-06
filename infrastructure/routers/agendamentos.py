@@ -19,11 +19,13 @@ class AgendamentoCreate(BaseModel):
     cliente_id: UUID
     data_hora: datetime
     status: StatusAgendamento = StatusAgendamento.AGENDADO
+    descricao: str | None = None
 
 
 class AgendamentoUpdate(BaseModel):
     data_hora: datetime
     status: StatusAgendamento
+    descricao: str | None = None
 
 
 class AgendamentoOut(BaseModel):
@@ -32,6 +34,7 @@ class AgendamentoOut(BaseModel):
     data_hora: datetime
     status: StatusAgendamento
     criado_em: datetime
+    descricao: str | None
 
 
 def get_use_cases(session: AsyncSession = Depends(get_db)) -> AgendamentoUseCases:
@@ -50,6 +53,7 @@ async def criar_agendamento(
         data_hora=payload.data_hora,
         status=payload.status,
         criado_em=datetime.now(timezone.utc),
+        descricao=payload.descricao,
     )
     try:
         return await use_cases.criar(agendamento)
@@ -95,6 +99,7 @@ async def atualizar_agendamento(
         data_hora=payload.data_hora,
         status=payload.status,
         criado_em=existente.criado_em,
+        descricao=payload.descricao if payload.descricao is not None else existente.descricao,
     )
     atualizado = await use_cases.atualizar(agendamento)
     if atualizado is None:

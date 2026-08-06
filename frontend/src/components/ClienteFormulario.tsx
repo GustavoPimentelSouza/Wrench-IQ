@@ -4,7 +4,7 @@ import { criarCliente } from "../services/clienteService";
 import type { ClienteCreateInput } from "../types/cliente";
 import { CamposCliente } from "./CamposCliente";
 
-const CAMPOS_VAZIOS: ClienteCreateInput = { nome: "", telefone: "", email: "" };
+const CAMPOS_VAZIOS: ClienteCreateInput = { nome: "", telefone: "", email: "", endereco: "" };
 
 interface ClienteFormularioProps {
   onCriado: () => void;

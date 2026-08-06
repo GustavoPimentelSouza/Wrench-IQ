@@ -11,12 +11,15 @@ _ID_UNICO = 1
 def _to_domain(orm: ConfiguracaoOficinaORM) -> ConfiguracaoOficina:
     return ConfiguracaoOficina(
         id=orm.id,
+        nome_empresa=orm.nome_empresa,
         horario_semana_abertura=orm.horario_semana_abertura,
         horario_semana_fechamento=orm.horario_semana_fechamento,
         horario_sabado_abertura=orm.horario_sabado_abertura,
         horario_sabado_fechamento=orm.horario_sabado_fechamento,
         horario_domingo_abertura=orm.horario_domingo_abertura,
         horario_domingo_fechamento=orm.horario_domingo_fechamento,
+        endereco=orm.endereco,
+        mensagem_encerramento=orm.mensagem_encerramento,
     )
 
 
@@ -33,12 +36,15 @@ class SqlAlchemyConfiguracaoOficinaRepository:
         if orm is None:
             orm = ConfiguracaoOficinaORM(id=_ID_UNICO)
             self._session.add(orm)
+        orm.nome_empresa = configuracao.nome_empresa
         orm.horario_semana_abertura = configuracao.horario_semana_abertura
         orm.horario_semana_fechamento = configuracao.horario_semana_fechamento
         orm.horario_sabado_abertura = configuracao.horario_sabado_abertura
         orm.horario_sabado_fechamento = configuracao.horario_sabado_fechamento
         orm.horario_domingo_abertura = configuracao.horario_domingo_abertura
         orm.horario_domingo_fechamento = configuracao.horario_domingo_fechamento
+        orm.endereco = configuracao.endereco
+        orm.mensagem_encerramento = configuracao.mensagem_encerramento
         await self._session.commit()
         await self._session.refresh(orm)
         return _to_domain(orm)

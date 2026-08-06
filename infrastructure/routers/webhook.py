@@ -17,6 +17,8 @@ from adapters.sqlalchemy_movimentacao_estoque_repository import (
 )
 from adapters.sqlalchemy_peca_repository import SqlAlchemyPecaRepository
 from adapters.sqlalchemy_pedido_repository import SqlAlchemyPedidoRepository
+from adapters.sqlalchemy_protocolo_repository import SqlAlchemyProtocoloRepository
+from adapters.sqlalchemy_usuario_repository import SqlAlchemyUsuarioRepository
 from application.agendamento_use_cases import AgendamentoUseCases
 from application.chat_service import ChatService
 from application.classificacao_mensagem_service import ClassificadorDeMensagem
@@ -25,7 +27,9 @@ from application.conversa_use_cases import ConversaUseCases
 from application.embedding_service import EmbeddingService
 from application.mensagem_use_cases import MensagemUseCases
 from application.pedido_use_cases import PedidoUseCases
+from application.protocolo_use_cases import ProtocoloUseCases
 from domain.cliente import Cliente, telefone_valido
+from domain.mensagem import MotivoAtendimento
 from infrastructure.db import get_db
 from infrastructure.ia import get_chat_service, get_classificador, get_embedding_service
 
@@ -91,19 +95,27 @@ async def webhook(
         SqlAlchemyConfiguracaoOficinaRepository(session)
     )
     agendamento_use_cases = AgendamentoUseCases(SqlAlchemyAgendamentoRepository(session))
+    protocolo_use_cases = ProtocoloUseCases(
+        SqlAlchemyProtocoloRepository(session), SqlAlchemyUsuarioRepository(session)
+    )
     conversa_use_cases = ConversaUseCases(
         chat_service,
         peca_repository,
         pedido_use_cases,
         configuracao_oficina_use_cases,
         agendamento_use_cases,
+        protocolo_use_cases,
     )
     resultado = await conversa_use_cases.responder(
         payload.mensagem, cliente.id, mensagem.categoria, historico
     )
     await mensagem_use_cases.registrar_resposta(mensagem.id, resultado.texto)
     if resultado.precisa_atendimento_humano:
-        await mensagem_use_cases.marcar_precisa_atendimento(mensagem.id)
+        # motivo_atendimento sempre vem preenchido junto de
+        # precisa_atendimento_humano=True (ver ConversaUseCases) — o "or"
+        # é só rede de segurança caso algum caminho novo esqueça de setar.
+        motivo = resultado.motivo_atendimento or MotivoAtendimento.FALHA_TECNICA
+        await mensagem_use_cases.marcar_precisa_atendimento(mensagem.id, motivo)
 
     return RespostaOut(
         resposta=resultado.texto,

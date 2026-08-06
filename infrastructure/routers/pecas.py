@@ -29,6 +29,7 @@ class PecaCreate(BaseModel):
     quantidade_estoque: int
     imagem_url: str | None = None
     quantidade_minima: int = 0
+    cor: str | None = None
 
 
 class PecaUpdate(BaseModel):
@@ -39,6 +40,7 @@ class PecaUpdate(BaseModel):
     quantidade_estoque: int
     imagem_url: str | None = None
     quantidade_minima: int = 0
+    cor: str | None = None
 
 
 class PecaOut(BaseModel):
@@ -52,6 +54,7 @@ class PecaOut(BaseModel):
     quantidade_estoque: int
     imagem_url: str | None
     quantidade_minima: int
+    cor: str | None
     criado_em: datetime
 
 
@@ -78,6 +81,7 @@ async def criar_peca(
         quantidade_estoque=payload.quantidade_estoque,
         imagem_url=payload.imagem_url,
         quantidade_minima=payload.quantidade_minima,
+        cor=payload.cor,
         criado_em=datetime.now(timezone.utc),
     )
     return await use_cases.criar(peca)
@@ -117,6 +121,7 @@ async def atualizar_peca(
         quantidade_estoque=payload.quantidade_estoque,
         imagem_url=payload.imagem_url,
         quantidade_minima=payload.quantidade_minima,
+        cor=payload.cor,
         criado_em=existente.criado_em,
     )
     atualizada = await use_cases.atualizar(peca)

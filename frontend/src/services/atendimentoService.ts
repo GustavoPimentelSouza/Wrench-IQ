@@ -1,11 +1,14 @@
 import { API_BASE_URL } from "./api";
 
+export type MotivoAtendimento = "falha_tecnica" | "reclamacao_sensivel" | "transferencia_ia";
+
 export interface MensagemAtendimento {
   id: string;
   cliente_id: string;
   texto: string;
   categoria: string;
   resposta_ia: string | null;
+  motivo_atendimento: MotivoAtendimento | null;
   criado_em: string;
 }
 

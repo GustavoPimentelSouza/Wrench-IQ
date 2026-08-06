@@ -35,6 +35,21 @@ export async function listarPedidos(
   return resposta.json();
 }
 
+// Usado no histórico do cliente (ClienteLinha) — mesma rota, só filtrando
+// por cliente_id em vez de trazer tudo.
+export async function listarPedidosDoCliente(clienteId: string, token: string): Promise<Pedido[]> {
+  const resposta = await fetch(
+    `${API_BASE_URL}/pedidos?cliente_id=${encodeURIComponent(clienteId)}&limit=200`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+
+  if (!resposta.ok) {
+    return extrairErro(resposta, "Não foi possível carregar os pedidos do cliente.");
+  }
+
+  return resposta.json();
+}
+
 export async function criarPedido(
   dados: PedidoCreateInput,
   token: string,

@@ -102,6 +102,9 @@ export function AgendaPage() {
                     {formatarDataHora(agendamento.data_hora)}
                   </span>
                 </div>
+                {agendamento.descricao && (
+                  <p className="mb-2 text-sm text-gray-600">{agendamento.descricao}</p>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                     {ROTULOS_STATUS[agendamento.status]}

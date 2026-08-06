@@ -30,11 +30,15 @@ def _to_domain(orm: PecaORM) -> Peca:
         imagem_url=orm.imagem_url,
         quantidade_minima=orm.quantidade_minima,
         criado_em=orm.criado_em,
+        cor=orm.cor,
     )
 
 
 def _texto_busca(peca: Peca) -> str:
-    return f"{peca.nome} {peca.marca_modelo_compativel} {peca.ano_compativel}"
+    # Cor entra na busca só quando existe — sem isso, "vela rosa" nunca
+    # encontraria a vela certa quando a peça realmente tem essa variação.
+    base = f"{peca.nome} {peca.marca_modelo_compativel} {peca.ano_compativel}"
+    return f"{base} {peca.cor}" if peca.cor else base
 
 
 class SqlAlchemyPecaRepository:
@@ -53,6 +57,7 @@ class SqlAlchemyPecaRepository:
             quantidade_estoque=peca.quantidade_estoque,
             imagem_url=peca.imagem_url,
             quantidade_minima=peca.quantidade_minima,
+            cor=peca.cor,
             criado_em=peca.criado_em,
             embedding=embedding,
         )
@@ -99,6 +104,7 @@ class SqlAlchemyPecaRepository:
         orm.quantidade_estoque = peca.quantidade_estoque
         orm.imagem_url = peca.imagem_url
         orm.quantidade_minima = peca.quantidade_minima
+        orm.cor = peca.cor
         orm.embedding = await self._embeddings.gerar_embedding(_texto_busca(peca))
         await self._session.commit()
         await self._session.refresh(orm)

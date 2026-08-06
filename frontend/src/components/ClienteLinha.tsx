@@ -1,14 +1,56 @@
 import { useState, type FormEvent } from "react";
 import { useAuth } from "../context/AuthContext";
 import { atualizarCliente, excluirCliente } from "../services/clienteService";
+import { listarPedidosDoCliente } from "../services/pedidoService";
 import { listarProtocolosDoCliente } from "../services/protocoloService";
 import type { Cliente, ClienteCreateInput } from "../types/cliente";
+import type { Pedido } from "../types/pedido";
 import type { Protocolo } from "../types/protocolo";
 import { CamposCliente } from "./CamposCliente";
 import { ProtocoloCard } from "./ProtocoloCard";
 
 function paraFormulario(cliente: Cliente): ClienteCreateInput {
-  return { nome: cliente.nome, telefone: cliente.telefone, email: cliente.email ?? "" };
+  return {
+    // Sem isso, editar um cliente sem nome pré-preenchia o campo com o
+    // telefone (o valor cru salvo) — obrigando apagar antes de digitar o
+    // nome de verdade. Começa vazio pra digitar direto.
+    nome: cliente.nome === cliente.telefone ? "" : cliente.nome,
+    telefone: cliente.telefone,
+    email: cliente.email ?? "",
+    endereco: cliente.endereco ?? "",
+  };
+}
+
+// "Cadastro incompleto" = nome ainda é só o telefone (cliente novo via
+// WhatsApp nunca deu o nome) ou não tem endereço — os dois dados que
+// tornam o atendimento mais profissional (ver discussão do dia a dia).
+function cadastroIncompleto(cliente: Cliente): boolean {
+  return cliente.nome === cliente.telefone || !cliente.endereco;
+}
+
+// Mostrar o telefone cru como se fosse o nome (nome === telefone é só o
+// valor padrão de cliente novo via WhatsApp) confundia — parecia erro,
+// repetindo o mesmo número duas vezes na linha. Isso deixa claro que
+// "ainda não tem nome" é um estado, não um dado de verdade.
+function nomeParaExibir(cliente: Cliente): string {
+  return cliente.nome === cliente.telefone ? "Cliente sem nome" : cliente.nome;
+}
+
+function formatarValor(valor: number): string {
+  return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+// Total gasto = soma do que já foi de fato comprometido com a gente,
+// protocolo (serviço) + pedido (peça) — cancelado não conta, porque nunca
+// virou receita de verdade.
+function calcularTotalGasto(protocolos: Protocolo[], pedidos: Pedido[]): number {
+  const totalProtocolos = protocolos
+    .filter((p) => p.status !== "cancelado" && p.valor_orcamento)
+    .reduce((soma, p) => soma + Number(p.valor_orcamento), 0);
+  const totalPedidos = pedidos
+    .filter((p) => p.status !== "cancelado")
+    .reduce((soma, p) => soma + Number(p.valor_total), 0);
+  return totalProtocolos + totalPedidos;
 }
 
 interface ClienteLinhaProps {
@@ -26,6 +68,7 @@ export function ClienteLinha({ cliente, onAtualizado }: ClienteLinhaProps) {
 
   const [historicoAberto, setHistoricoAberto] = useState(false);
   const [protocolos, setProtocolos] = useState<Protocolo[]>([]);
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
 
   function iniciarEdicao() {
@@ -85,9 +128,15 @@ export function ClienteLinha({ cliente, onAtualizado }: ClienteLinhaProps) {
     setHistoricoAberto(true);
     setCarregandoHistorico(true);
     try {
-      setProtocolos(await listarProtocolosDoCliente(cliente.id));
+      const [protocolosCarregados, pedidosCarregados] = await Promise.all([
+        listarProtocolosDoCliente(cliente.id),
+        token ? listarPedidosDoCliente(cliente.id, token) : Promise.resolve([]),
+      ]);
+      setProtocolos(protocolosCarregados);
+      setPedidos(pedidosCarregados);
     } catch {
       setProtocolos([]);
+      setPedidos([]);
     } finally {
       setCarregandoHistorico(false);
     }
@@ -127,7 +176,22 @@ export function ClienteLinha({ cliente, onAtualizado }: ClienteLinhaProps) {
     <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
       <div className="flex items-center gap-4 p-4">
         <div className="flex-1">
-          <p className="font-medium text-gray-900">{cliente.nome}</p>
+          <div className="flex items-center gap-2">
+            <p
+              className={
+                cliente.nome === cliente.telefone
+                  ? "italic text-gray-400"
+                  : "font-medium text-gray-900"
+              }
+            >
+              {nomeParaExibir(cliente)}
+            </p>
+            {cadastroIncompleto(cliente) && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                Dados incompletos
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-500">
             {cliente.telefone} {cliente.email ? `· ${cliente.email}` : ""}
           </p>
@@ -162,21 +226,52 @@ export function ClienteLinha({ cliente, onAtualizado }: ClienteLinhaProps) {
 
       {historicoAberto && (
         <div className="border-t border-gray-100 bg-gray-50 p-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Histórico de serviços
+          {!carregandoHistorico && (protocolos.length > 0 || pedidos.length > 0) && (
+            <p className="mb-3 text-sm font-medium text-gray-900">
+              Total gasto: {formatarValor(calcularTotalGasto(protocolos, pedidos))}
+            </p>
+          )}
+
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Serviços (protocolos)
           </p>
           {carregandoHistorico && <p className="text-sm text-gray-500">Carregando...</p>}
           {!carregandoHistorico && protocolos.length === 0 && (
-            <p className="text-sm text-gray-500">
-              Nenhum protocolo registrado para este cliente ainda.
-            </p>
+            <p className="mb-4 text-sm text-gray-500">Nenhum protocolo ainda.</p>
           )}
           {!carregandoHistorico && protocolos.length > 0 && (
-            <div className="flex flex-col gap-2">
+            <div className="mb-4 flex flex-col gap-2">
               {protocolos.map((protocolo) => (
                 <ProtocoloCard key={protocolo.id} protocolo={protocolo} />
               ))}
             </div>
+          )}
+
+          {/* Peças compradas — antes só aparecia em Pedidos, sem ligação
+              nenhuma com o cadastro do cliente; sem isso o histórico
+              ficava incompleto (só metade do que o cliente já consumiu). */}
+          {!carregandoHistorico && (
+            <>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Peças (pedidos)
+              </p>
+              {pedidos.length === 0 && (
+                <p className="text-sm text-gray-500">Nenhum pedido ainda.</p>
+              )}
+              {pedidos.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {pedidos.map((pedido) => (
+                    <div
+                      key={pedido.id}
+                      className="rounded-xl border border-gray-100 bg-white p-3 text-sm"
+                    >
+                      #{String(pedido.numero).padStart(4, "0")} · {pedido.quantidade}x ·{" "}
+                      {formatarValor(Number(pedido.valor_total))} · {pedido.status}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

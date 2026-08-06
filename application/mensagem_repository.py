@@ -1,7 +1,7 @@
 from typing import Protocol
 from uuid import UUID
 
-from domain.mensagem import Mensagem
+from domain.mensagem import Mensagem, MotivoAtendimento
 
 
 # Mensagem é append-only (log) — sem excluir de propósito. A única "edição"
@@ -18,9 +18,12 @@ class MensagemRepository(Protocol):
 
     async def registrar_resposta(self, mensagem_id: UUID, resposta: str) -> None: ...
 
-    # Regra 4 do CLAUDE.md (reclamação sensível/falha técnica → humano).
-    # marcar_atendimento_resolvido é o staff dando baixa depois de atender.
-    async def marcar_precisa_atendimento(self, mensagem_id: UUID) -> None: ...
+    # Regra 4 do CLAUDE.md (reclamação sensível/falha técnica/pedido da IA →
+    # humano). marcar_atendimento_resolvido é o staff dando baixa depois de
+    # atender.
+    async def marcar_precisa_atendimento(
+        self, mensagem_id: UUID, motivo: MotivoAtendimento
+    ) -> None: ...
 
     async def marcar_atendimento_resolvido(self, mensagem_id: UUID) -> None: ...
 

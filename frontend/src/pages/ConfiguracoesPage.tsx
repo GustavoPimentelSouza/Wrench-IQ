@@ -68,6 +68,9 @@ function BlocoDia({ titulo, permiteFechar = true, dia, onChange }: BlocoDiaProps
 
 export function ConfiguracoesPage() {
   const { token } = useAuth();
+  const [nomeEmpresa, setNomeEmpresa] = useState("");
+  const [endereco, setEndereco] = useState("");
+  const [mensagemEncerramento, setMensagemEncerramento] = useState("");
   const [semana, setSemana] = useState<FormularioDia>(diaInicial("08:00", "19:00"));
   const [sabado, setSabado] = useState<FormularioDia>(diaInicial("08:00", "18:00"));
   const [domingo, setDomingo] = useState<FormularioDia>(diaInicial("08:00", "12:00"));
@@ -79,6 +82,9 @@ export function ConfiguracoesPage() {
   useEffect(() => {
     buscarConfiguracaoOficina()
       .then((config) => {
+        setNomeEmpresa(config.nome_empresa);
+        setEndereco(config.endereco ?? "");
+        setMensagemEncerramento(config.mensagem_encerramento ?? "");
         setSemana(diaInicial(config.horario_semana_abertura, config.horario_semana_fechamento));
         setSabado(diaInicial(config.horario_sabado_abertura, config.horario_sabado_fechamento));
         setDomingo(diaInicial(config.horario_domingo_abertura, config.horario_domingo_fechamento));
@@ -100,6 +106,9 @@ export function ConfiguracoesPage() {
     const sab = paraPayload(sabado);
     const dom = paraPayload(domingo);
     const payload: ConfiguracaoOficina = {
+      nome_empresa: nomeEmpresa,
+      endereco: endereco.trim() || null,
+      mensagem_encerramento: mensagemEncerramento.trim() || null,
       horario_semana_abertura: semana.abertura,
       horario_semana_fechamento: semana.fechamento,
       horario_sabado_abertura: sab.abertura,
@@ -121,13 +130,45 @@ export function ConfiguracoesPage() {
     <div>
       <h2 className="mb-1 text-lg font-semibold text-gray-900">Configurações da oficina</h2>
       <p className="mb-4 text-xs text-gray-500">
-        O horário aqui é o que a IA usa nas respostas do WhatsApp — mantenha atualizado.
+        Esses dados são o que a IA usa nas respostas do WhatsApp — mantenha atualizado, ela nunca
+        inventa informação que não estiver aqui.
       </p>
 
       {carregando && <p className="text-sm text-gray-500">Carregando...</p>}
 
       {!carregando && (
         <div className="flex max-w-md flex-col gap-3">
+          <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+            <label className="mb-1 block text-sm font-medium text-gray-900">
+              Nome da oficina
+            </label>
+            <input
+              type="text"
+              value={nomeEmpresa}
+              onChange={(evento) => setNomeEmpresa(evento.target.value)}
+              placeholder="Ex: Oficina Dugrau"
+              className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+            />
+            <label className="mb-1 block text-sm font-medium text-gray-900">Endereço</label>
+            <input
+              type="text"
+              value={endereco}
+              onChange={(evento) => setEndereco(evento.target.value)}
+              placeholder="Ex: Rua das Oficinas, 123 - Centro"
+              className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+            />
+            <label className="mb-1 block text-sm font-medium text-gray-900">
+              Mensagem de encerramento
+            </label>
+            <input
+              type="text"
+              value={mensagemEncerramento}
+              onChange={(evento) => setMensagemEncerramento(evento.target.value)}
+              placeholder="Ex: Agradecemos seu contato!"
+              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+            />
+          </div>
+
           <BlocoDia titulo="Segunda a sexta" permiteFechar={false} dia={semana} onChange={setSemana} />
           <BlocoDia titulo="Sábado" dia={sabado} onChange={setSabado} />
           <BlocoDia titulo="Domingo" dia={domingo} onChange={setDomingo} />

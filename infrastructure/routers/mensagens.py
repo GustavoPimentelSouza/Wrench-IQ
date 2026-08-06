@@ -35,6 +35,7 @@ class MensagemAtendimentoOut(BaseModel):
     texto: str
     categoria: str
     resposta_ia: str | None
+    motivo_atendimento: str | None
     criado_em: datetime
 
 
@@ -68,6 +69,7 @@ async def listar_atendimento_pendente(
             texto=m.texto,
             categoria=m.categoria.value,
             resposta_ia=m.resposta_ia,
+            motivo_atendimento=m.motivo_atendimento.value if m.motivo_atendimento else None,
             criado_em=m.criado_em,
         )
         for m in pendentes

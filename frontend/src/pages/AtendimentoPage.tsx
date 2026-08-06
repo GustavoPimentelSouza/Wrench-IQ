@@ -4,9 +4,25 @@ import {
   listarAtendimentoPendente,
   resolverAtendimento,
   type MensagemAtendimento,
+  type MotivoAtendimento,
 } from "../services/atendimentoService";
 import { listarClientes } from "../services/clienteService";
 import type { Cliente } from "../types/cliente";
+
+// Sem isso, falha técnica (Groq fora do ar, rate limit) e reclamação de
+// cliente de verdade apareciam idênticas na fila — o atendente só descobria
+// qual era qual lendo a conversa inteira. Cores diferentes = triagem rápida.
+const MOTIVO_LABELS: Record<MotivoAtendimento, string> = {
+  falha_tecnica: "Falha técnica",
+  reclamacao_sensivel: "Reclamação",
+  transferencia_ia: "Transferido pela IA",
+};
+
+const MOTIVO_CORES: Record<MotivoAtendimento, string> = {
+  falha_tecnica: "bg-gray-100 text-gray-600",
+  reclamacao_sensivel: "bg-red-100 text-red-700",
+  transferencia_ia: "bg-violet-100 text-violet-700",
+};
 
 // 1h de espera é o corte pra destacar como atrasado — no dia a dia da
 // oficina, uma reclamação parada esse tempo já é grave o suficiente pra
@@ -73,8 +89,8 @@ export function AtendimentoPage() {
     <div>
       <h2 className="mb-1 text-lg font-semibold text-gray-900">Atendimento humano</h2>
       <p className="mb-4 text-xs text-gray-500">
-        Conversas que a IA não conseguiu resolver sozinha — reclamação sensível ou falha
-        técnica (regra 4 do projeto). Mais antigas primeiro.
+        Conversas que a IA não conseguiu resolver sozinha — reclamação sensível, falha
+        técnica, ou a própria IA pediu transferência (regra 4 do projeto). Mais antigas primeiro.
       </p>
 
       {erro && <p className="mb-4 text-sm text-red-700">{erro}</p>}
@@ -106,9 +122,18 @@ export function AtendimentoPage() {
                   </span>
                 </div>
 
-                <p className="mb-2 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                  {mensagem.categoria}
-                </p>
+                <div className="mb-2 flex gap-2">
+                  <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                    {mensagem.categoria}
+                  </span>
+                  {mensagem.motivo_atendimento && (
+                    <span
+                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${MOTIVO_CORES[mensagem.motivo_atendimento]}`}
+                    >
+                      {MOTIVO_LABELS[mensagem.motivo_atendimento]}
+                    </span>
+                  )}
+                </div>
 
                 <p className="mb-1 text-sm text-gray-700">
                   <span className="font-medium">Cliente:</span> {mensagem.texto}

@@ -38,12 +38,13 @@ class PecaORM(Base):
     quantidade_minima: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    cor: Mapped[str | None] = mapped_column(String, nullable=True)
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
-    # Vetor de "nome + marca_modelo_compativel + ano_compativel", gerado ao
-    # criar/atualizar a peça (ver sqlalchemy_peca_repository.py) — é o que
-    # permite buscar por significado, não só por substring literal.
+    # Vetor de "nome + marca_modelo_compativel + ano_compativel + cor",
+    # gerado ao criar/atualizar a peça (ver sqlalchemy_peca_repository.py) —
+    # é o que permite buscar por significado, não só por substring literal.
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
 
 
@@ -90,6 +91,7 @@ class MensagemORM(Base):
     precisa_atendimento_humano: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    motivo_atendimento: Mapped[str | None] = mapped_column(String, nullable=True)
     atendimento_resolvido: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -215,6 +217,7 @@ class AgendamentoORM(Base):
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    descricao: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class MovimentacaoEstoqueORM(Base):
@@ -239,9 +242,12 @@ class ConfiguracaoOficinaORM(Base):
     __tablename__ = "configuracao_oficina"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nome_empresa: Mapped[str] = mapped_column(String, nullable=False)
     horario_semana_abertura: Mapped[time] = mapped_column(Time, nullable=False)
     horario_semana_fechamento: Mapped[time] = mapped_column(Time, nullable=False)
     horario_sabado_abertura: Mapped[time | None] = mapped_column(Time, nullable=True)
     horario_sabado_fechamento: Mapped[time | None] = mapped_column(Time, nullable=True)
     horario_domingo_abertura: Mapped[time | None] = mapped_column(Time, nullable=True)
     horario_domingo_fechamento: Mapped[time | None] = mapped_column(Time, nullable=True)
+    endereco: Mapped[str | None] = mapped_column(String, nullable=True)
+    mensagem_encerramento: Mapped[str | None] = mapped_column(String, nullable=True)
