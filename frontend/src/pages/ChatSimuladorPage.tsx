@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { enviarMensagemSimulada } from "../services/webhookService";
 
 interface MensagemChat {
@@ -21,6 +21,16 @@ export function ChatSimuladorPage() {
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Só depois que o React de fato remove o `disabled` do input na tela
+  // (commit do useEffect roda depois do DOM atualizar) — chamar .focus()
+  // antes disso, ainda com o campo desabilitado, não faz nada.
+  useEffect(() => {
+    if (!enviando) {
+      inputRef.current?.focus();
+    }
+  }, [enviando]);
 
   function novaConversa() {
     setTelefone(gerarTelefoneDeTeste());
@@ -117,6 +127,7 @@ export function ChatSimuladorPage() {
 
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
+          ref={inputRef}
           value={texto}
           onChange={(evento) => setTexto(evento.target.value)}
           placeholder="Digite como se fosse o cliente..."
