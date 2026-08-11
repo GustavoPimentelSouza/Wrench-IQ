@@ -2,15 +2,19 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from application.agendamento_repository import AgendamentoRepository
+from application.usuario_repository import UsuarioRepository
 from domain.agendamento import Agendamento
+from domain.especialidade import Especialidade, especialidades_para_disponibilidade
+from domain.usuario import Usuario
 
 
 # Ainda não existe regra impedindo dois agendamentos no mesmo horário —
 # validação desse tipo simplesmente não existe ainda no projeto (não foi
 # pedido, não foi construído).
 class AgendamentoUseCases:
-    def __init__(self, repository: AgendamentoRepository):
+    def __init__(self, repository: AgendamentoRepository, usuario_repository: UsuarioRepository):
         self._repository = repository
+        self._usuarios = usuario_repository
 
     async def criar(self, agendamento: Agendamento) -> Agendamento:
         if agendamento.data_hora < datetime.now(timezone.utc):
@@ -34,3 +38,15 @@ class AgendamentoUseCases:
 
     async def excluir(self, agendamento_id: UUID) -> bool:
         return await self._repository.excluir(agendamento_id)
+
+    # Agendamento/Protocolo podem guardar Especialidade.INDEFINIDO de
+    # verdade (ver domain/especialidade.py) — não existe mecânico "de
+    # indefinido" cadastrado, então pra achar quem pode atender esse caso a
+    # tradução (indefinido -> mecanica_geral) acontece aqui, na hora da
+    # consulta, sem alterar o dado original salvo.
+    async def listar_mecanicos_qualificados(
+        self, especialidades: list[Especialidade]
+    ) -> list[Usuario]:
+        return await self._usuarios.listar_mecanicos_por_especialidade(
+            especialidades_para_disponibilidade(especialidades)
+        )

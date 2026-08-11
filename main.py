@@ -7,11 +7,13 @@ from infrastructure.routers import (
     auth,
     clientes,
     configuracao_oficina,
+    itens_adicionais,
     mensagens,
     movimentacoes_estoque,
     pecas,
     pedidos,
     protocolos,
+    relatorios,
     veiculos,
     webhook,
 )
@@ -37,5 +39,7 @@ app.include_router(veiculos.router)
 app.include_router(agendamentos.router)
 app.include_router(movimentacoes_estoque.router)
 app.include_router(configuracao_oficina.router)
+app.include_router(itens_adicionais.router)
+app.include_router(relatorios.router)
 
 registrar_admin(app)

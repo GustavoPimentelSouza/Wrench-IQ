@@ -33,6 +33,15 @@ class MotivoAtendimento(str, enum.Enum):
     # (ex: pedido fora do que ela sabe resolver) — diferente de reclamação
     # sensível, que é decidido antes de chamar a IA, pela classificação.
     TRANSFERENCIA_IA = "transferencia_ia"
+    # Determinístico, decidido ANTES de chamar a IA nesse turno (ver
+    # ConversaUseCases.responder) — quantas trocas seguidas sem nenhuma ação
+    # concluída (criar_pedido, cancelar_pedido, agendar_visita) já
+    # aconteceram passou do limite configurado (ConfiguracaoOficina.
+    # limite_trocas_sem_resolucao). Cliente insistindo (ex: tentando
+    # manipular preço) ou a IA capengando são os dois casos reais que isso
+    # cobre — em ambos, continuar tentando sozinha só gasta chamada de API
+    # e atrasa quem precisa de fato de um humano.
+    LIMITE_TROCAS_ATINGIDO = "limite_trocas_atingido"
 
 
 @dataclass

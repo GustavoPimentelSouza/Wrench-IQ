@@ -30,10 +30,18 @@ class RespostaChat:
 
 class ChatService(Protocol):
     async def gerar_resposta(
-        self, mensagens: list[dict[str, Any]], ferramentas_disponiveis: list[dict[str, Any]]
+        self,
+        mensagens: list[dict[str, Any]],
+        ferramentas_disponiveis: list[dict[str, Any]],
+        forcar_ferramenta: bool = False,
     ) -> RespostaChat: ...
     # mensagens e ferramentas_disponiveis seguem o formato cru da OpenAI/Groq
     # (messages/tools) — dict, pra não acoplar a interface a um SDK específico.
     # Ser uma lista (não uma string única) é o que permite tanto o vai-e-volta
     # de tool calling (anexar a chamada + o resultado antes de pedir a
     # resposta final) quanto, no futuro, memória de conversa de verdade.
+    # forcar_ferramenta: quando True, o modelo é OBRIGADO a chamar alguma
+    # ferramenta da lista, nunca responder só em texto — garantia de API
+    # (tool_choice="required"), não sugestão de prompt. Existe pra fechar de
+    # vez o caso visto ao vivo: a IA "confirmando" que uma peça existe/está
+    # em estoque sem nunca ter consultado o catálogo (ver ConversaUseCases).

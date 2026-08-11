@@ -52,6 +52,20 @@ Clean Architecture:
    Meta (janela de 24h do WhatsApp limita mensagens livres fora desse prazo).
 6. Compra remota tem direito de arrependimento de 7 dias (CDC) — contemplar
    no status do pedido.
+7. **Especialidade (funilaria_pintura/eletrica/mecanica_geral/montagem) é
+   sempre lista, nunca valor único** — um mesmo caso pode precisar de mais
+   de uma área ao mesmo tempo (ex: batida com dano elétrico junto).
+8. **`indefinido` é tratado como mecânica geral só na hora de buscar
+   disponibilidade/mecânico qualificado** — o dado salvo continua
+   `indefinido` (nunca é convertido silenciosamente ao criar o registro);
+   forçar uma especialidade errada é pior do que admitir incerteza.
+9. **Comprar peça e pedir instalação/avaliação são ferramentas de IA
+   diferentes** (`consultar_preco_peca` vs `agendar_visita`), nunca um
+   campo extra numa ferramenta só — evita a IA agendar visita por engano
+   só porque o cliente mencionou uma peça.
+10. **Toda resposta de "sem horário disponível" tem que vir junto com a
+    próxima data que tem vaga** (ou lista de espera) — nunca só "não tem
+    horário", pra não perder cliente por resposta de porta fechada.
 
 ## Como construir
 

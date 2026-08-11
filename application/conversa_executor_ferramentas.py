@@ -15,6 +15,7 @@ from application.pedido_use_cases import (
 )
 from application.protocolo_use_cases import ProtocoloUseCases
 from domain.agendamento import Agendamento, StatusAgendamento
+from domain.especialidade import normalizar_especialidades
 from domain.mensagem import MotivoAtendimento
 from domain.pedido import TipoEntrega
 from domain.peca import Peca
@@ -93,6 +94,21 @@ class ExecutorFerramentasConversa:
             data_hora = datetime.fromisoformat(argumentos["data_hora"])
             if data_hora.tzinfo is None:
                 data_hora = data_hora.replace(tzinfo=timezone.utc)
+            # Se a IA não mandar o campo (não devia acontecer, é obrigatório
+            # no schema, mas defensivo igual o resto do executor), trata
+            # como "não sei" em vez de quebrar.
+            especialidades = normalizar_especialidades(
+                argumentos.get("especialidades") or ["indefinido"]
+            )
+            # Nenhum classificador acerta 100% do volume real de mensagens —
+            # quando a própria IA já sinaliza baixa confiança, forçar a
+            # especialidade sugerida seria direcionar o caso pro mecânico
+            # errado só pra "parecer decidido". Reduz a ambição da resposta
+            # em vez disso: vira indefinido, sem perguntar nada extra ao
+            # cliente (o generalista faz a triagem presencial e reclassifica
+            # depois — ver ProtocoloUseCases.reclassificar_especialidade).
+            if argumentos.get("confianca") == "baixa":
+                especialidades = normalizar_especialidades(["indefinido"])
             agendamento = await self._agendamentos.criar(
                 Agendamento(
                     id=uuid4(),
@@ -101,10 +117,16 @@ class ExecutorFerramentasConversa:
                     status=StatusAgendamento.AGENDADO,
                     criado_em=datetime.now(timezone.utc),
                     descricao=argumentos.get("descricao"),
+                    especialidades=especialidades,
                 )
             )
         except ValueError as erro:
-            return f"Não foi possível agendar: {erro}. Pergunte ao cliente uma data válida, no futuro."
+            # Cobre tanto data inválida/passada quanto um valor de
+            # especialidade que a IA inventou fora do enum — as duas causas
+            # levantam ValueError, e as duas exigem a IA tentar de novo com
+            # dado válido, então uma mensagem genérica cobre ambas sem
+            # confundir "data" com "especialidade" incorretamente.
+            return f"Não foi possível agendar: {erro}. Corrija o dado e chame agendar_visita de novo."
 
         data_formatada = agendamento.data_hora.strftime("%d/%m/%Y às %H:%M")
         return (

@@ -18,6 +18,7 @@ from application.conversa_prompts import (
     MAX_RODADAS_FERRAMENTA,
     MENSAGEM_ENCERRAMENTO_PADRAO,
     MENSAGEM_FALLBACK_ERRO,
+    MENSAGEM_LIMITE_TROCAS,
     MENSAGEM_PRECO_NAO_VERIFICADO,
     MENSAGEM_SAUDACAO,
     construir_prompt_sistema,
@@ -27,6 +28,7 @@ from application.conversa_prompts import (
 from application.peca_repository import PecaRepository
 from application.pedido_use_cases import PedidoUseCases
 from application.protocolo_use_cases import ProtocoloUseCases
+from domain.configuracao_oficina import ConfiguracaoOficina
 from domain.mensagem import CategoriaMensagem, Mensagem, MotivoAtendimento
 
 _logger = logging.getLogger(__name__)
@@ -109,6 +111,7 @@ class ConversaUseCases:
         if eh_saudacao(mensagem):
             return ResultadoConversa(texto=MENSAGEM_SAUDACAO)
         historico = historico or []
+        configuracao = await self._configuracao_oficina.buscar()
         # Alta confiança, decidido sem chamar o modelo: cliente confirmando
         # que não quer mais nada, logo depois de uma ação concluída (pedido
         # criado, agendamento marcado, etc.). Já vimos o modelo, nesse
@@ -121,12 +124,35 @@ class ConversaUseCases:
             and eh_confirmacao_encerramento(mensagem)
         )
         if se_encerrando:
-            configuracao = await self._configuracao_oficina.buscar()
             return ResultadoConversa(
                 texto=configuracao.mensagem_encerramento or MENSAGEM_ENCERRAMENTO_PADRAO
             )
+        # Nenhuma IA acerta 100% das vezes — depois de N trocas seguidas sem
+        # nenhuma ação concluída (configurável, ver ConfiguracaoOficina.
+        # limite_trocas_sem_resolucao), corta e transfere pra humano em vez
+        # de deixar a IA tentando de novo sozinha. Cobre tanto "a IA está
+        # capengando numa conversa confusa" quanto "o cliente está
+        # insistindo em algo que não deveria ser resolvido pelo chat" (ex:
+        # tentando negociar preço se passando por dono da oficina) —
+        # decidido ANTES de chamar o modelo, sem gastar mais uma chamada de
+        # API à toa. Reseta sozinho: acao_finalizadora inclui
+        # transferir_atendimento, então depois de um handoff o contador
+        # volta a zero pro próximo assunto.
+        trocas_sem_resolucao = 0
+        for anterior in reversed(historico):
+            if anterior.acao_finalizadora is not None:
+                break
+            trocas_sem_resolucao += 1
+        if trocas_sem_resolucao >= configuracao.limite_trocas_sem_resolucao:
+            return ResultadoConversa(
+                texto=MENSAGEM_LIMITE_TROCAS,
+                precisa_atendimento_humano=True,
+                motivo_atendimento=MotivoAtendimento.LIMITE_TROCAS_ATINGIDO,
+            )
         try:
-            resultado = await self._responder_ou_falhar(mensagem, cliente_id, categoria, historico)
+            resultado = await self._responder_ou_falhar(
+                mensagem, cliente_id, categoria, historico, configuracao
+            )
             return self._sem_imagem_repetida(resultado, historico)
         except Exception:
             # Sem isso, falha técnica virava caixa-preta: cliente recebia o
@@ -140,7 +166,12 @@ class ConversaUseCases:
             )
 
     async def _responder_ou_falhar(
-        self, mensagem: str, cliente_id: UUID, categoria: CategoriaMensagem, historico: list[Mensagem]
+        self,
+        mensagem: str,
+        cliente_id: UUID,
+        categoria: CategoriaMensagem,
+        historico: list[Mensagem],
+        configuracao: ConfiguracaoOficina,
     ) -> ResultadoConversa:
         # Classificação é por mensagem isolada, sem memória de conversa —
         # uma resposta curta tipo "pode ser dia 10 às 14h" não menciona
@@ -162,6 +193,14 @@ class ConversaUseCases:
         em_fluxo_agendamento = categoria == CategoriaMensagem.AGENDAMENTO or any(
             anterior.categoria == CategoriaMensagem.AGENDAMENTO for anterior in historico
         )
+        # Mesma ideia de "gruda", só que usada aqui apenas pra decidir
+        # quando FORÇAR consultar_preco_peca (ver forcar_ferramenta mais
+        # abaixo) — não muda qual ferramenta/prompt é oferecido, porque
+        # consulta_peca já cai no mesmo FERRAMENTAS_VENDA/_PROMPT_BASE que
+        # duvida_geral e nao_identificado.
+        em_fluxo_consulta_peca = categoria == CategoriaMensagem.CONSULTA_PECA or any(
+            anterior.categoria == CategoriaMensagem.CONSULTA_PECA for anterior in historico
+        )
         # Reclamação não "gruda" nos turnos seguintes que nem dano estrutural
         # — se ainda for reclamação de verdade, o classificador ou a própria
         # IA (vendo o histórico) reconhece de novo; não precisa forçar.
@@ -177,7 +216,6 @@ class ConversaUseCases:
         else:
             categoria_efetiva = categoria
             ferramentas = FERRAMENTAS_VENDA
-        configuracao = await self._configuracao_oficina.buscar()
         prompt_sistema = construir_prompt_sistema(configuracao, categoria_efetiva)
         mensagens: list[dict[str, Any]] = [{"role": "system", "content": prompt_sistema}]
         for anterior in historico:
@@ -186,11 +224,36 @@ class ConversaUseCases:
                 mensagens.append({"role": "assistant", "content": anterior.resposta_ia})
         mensagens.append({"role": "user", "content": mensagem})
 
+        # Marcador embutido no texto que consultar_preco_peca devolve (ver
+        # conversa_executor_ferramentas._consultar_preco_peca) — sinal
+        # barato de "uma consulta real ao catálogo já aconteceu nessa
+        # conversa", sem precisar de campo novo no banco.
+        peca_ja_consultada_no_historico = any(
+            "[peca_id:" in (anterior.resposta_ia or "") for anterior in historico
+        )
+
         ferramentas_chamadas: list[str] = []
         imagem_url: str | None = None
 
         for _ in range(MAX_RODADAS_FERRAMENTA):
-            resposta = await self._chat.gerar_resposta(mensagens, ferramentas)
+            # Visto ao vivo: depois de algumas trocas confusas, a IA
+            # "confirmou" que uma peça existe/está em estoque sem NUNCA ter
+            # chamado consultar_preco_peca na conversa inteira. A 1ª
+            # pergunta de esclarecimento continua livre (regra "se vago,
+            # pergunte antes" — bool(historico) cobre isso, ainda vazio na
+            # primeira mensagem do cliente sobre o assunto), mas a partir da
+            # 2ª mensagem em diante, se ainda não teve consulta real, a
+            # resposta é OBRIGATORIAMENTE uma chamada de ferramenta —
+            # garantia de API (tool_choice="required"), não sugestão de
+            # prompt (ver application/chat_service.py).
+            forcar_ferramenta = (
+                ferramentas is FERRAMENTAS_VENDA
+                and em_fluxo_consulta_peca
+                and bool(historico)
+                and not peca_ja_consultada_no_historico
+                and "consultar_preco_peca" not in ferramentas_chamadas
+            )
+            resposta = await self._chat.gerar_resposta(mensagens, ferramentas, forcar_ferramenta)
 
             if not resposta.chamadas_ferramentas:
                 if resposta.texto and _cita_preco_sem_verificar(resposta.texto, ferramentas_chamadas):

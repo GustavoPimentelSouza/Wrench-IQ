@@ -18,6 +18,7 @@ from adapters.sqlalchemy_movimentacao_estoque_repository import (
 from adapters.sqlalchemy_peca_repository import SqlAlchemyPecaRepository
 from adapters.sqlalchemy_pedido_repository import SqlAlchemyPedidoRepository
 from adapters.sqlalchemy_protocolo_repository import SqlAlchemyProtocoloRepository
+from adapters.sqlalchemy_reclassificacao_repository import SqlAlchemyReclassificacaoRepository
 from adapters.sqlalchemy_usuario_repository import SqlAlchemyUsuarioRepository
 from application.agendamento_use_cases import AgendamentoUseCases
 from application.chat_service import ChatService
@@ -94,9 +95,13 @@ async def webhook(
     configuracao_oficina_use_cases = ConfiguracaoOficinaUseCases(
         SqlAlchemyConfiguracaoOficinaRepository(session)
     )
-    agendamento_use_cases = AgendamentoUseCases(SqlAlchemyAgendamentoRepository(session))
+    agendamento_use_cases = AgendamentoUseCases(
+        SqlAlchemyAgendamentoRepository(session), SqlAlchemyUsuarioRepository(session)
+    )
     protocolo_use_cases = ProtocoloUseCases(
-        SqlAlchemyProtocoloRepository(session), SqlAlchemyUsuarioRepository(session)
+        SqlAlchemyProtocoloRepository(session),
+        SqlAlchemyUsuarioRepository(session),
+        SqlAlchemyReclassificacaoRepository(session),
     )
     conversa_use_cases = ConversaUseCases(
         chat_service,
@@ -109,7 +114,9 @@ async def webhook(
     resultado = await conversa_use_cases.responder(
         payload.mensagem, cliente.id, mensagem.categoria, historico
     )
-    await mensagem_use_cases.registrar_resposta(mensagem.id, resultado.texto)
+    await mensagem_use_cases.registrar_resposta(
+        mensagem.id, resultado.texto, resultado.acao_finalizadora, resultado.imagem_url
+    )
     if resultado.precisa_atendimento_humano:
         # motivo_atendimento sempre vem preenchido junto de
         # precisa_atendimento_humano=True (ver ConversaUseCases) — o "or"

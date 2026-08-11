@@ -1,8 +1,10 @@
 import enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
+
+from domain.especialidade import Especialidade
 
 
 class StatusProtocolo(str, enum.Enum):
@@ -10,6 +12,12 @@ class StatusProtocolo(str, enum.Enum):
     # dois primeiros. PRONTO/CANCELADO são finais (protocolo_use_cases.py).
     AGUARDANDO_APROVACAO = "aguardando_aprovacao"
     EM_EXECUCAO = "em_execucao"
+    # Um serviço pode revelar problema novo no meio da execução (ex: abriu o
+    # motor pra trocar a correia e achou a bomba d'água furada) — o
+    # protocolo não pode travar nem "mentir" que está em execução normal
+    # enquanto espera o cliente decidir. Ver domain/item_adicional_protocolo.py
+    # e ItemAdicionalUseCases.
+    AGUARDANDO_APROVACAO_ADICIONAL = "aguardando_aprovacao_adicional"
     PRONTO = "pronto"
     CANCELADO = "cancelado"
 
@@ -35,3 +43,8 @@ class Protocolo:
     # Exigido pelo use case antes de aprovar() (ver protocolo_use_cases.py).
     valor_orcamento: Decimal | None = None
     motivo_cancelamento: str | None = None
+    # N:N (não um valor único) — um caso pode precisar de mais de uma área
+    # ao mesmo tempo (ex: batida com dano elétrico junto). Reclassificável
+    # pelo mecânico após avaliação presencial (ver
+    # ProtocoloUseCases.reclassificar_especialidade).
+    especialidades: list[Especialidade] = field(default_factory=list)

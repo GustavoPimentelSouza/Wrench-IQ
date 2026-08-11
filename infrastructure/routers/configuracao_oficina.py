@@ -26,6 +26,8 @@ class ConfiguracaoOficinaIn(BaseModel):
     horario_domingo_fechamento: time | None = None
     endereco: str | None = None
     mensagem_encerramento: str | None = None
+    tolerancia_no_show_minutos: int = 20
+    limite_trocas_sem_resolucao: int = 3
 
 
 # Idêntico ao In hoje, mas mantido como classe separada — mesmo padrão dos

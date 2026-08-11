@@ -20,6 +20,8 @@ def _to_domain(orm: ConfiguracaoOficinaORM) -> ConfiguracaoOficina:
         horario_domingo_fechamento=orm.horario_domingo_fechamento,
         endereco=orm.endereco,
         mensagem_encerramento=orm.mensagem_encerramento,
+        tolerancia_no_show_minutos=orm.tolerancia_no_show_minutos,
+        limite_trocas_sem_resolucao=orm.limite_trocas_sem_resolucao,
     )
 
 
@@ -45,6 +47,8 @@ class SqlAlchemyConfiguracaoOficinaRepository:
         orm.horario_domingo_fechamento = configuracao.horario_domingo_fechamento
         orm.endereco = configuracao.endereco
         orm.mensagem_encerramento = configuracao.mensagem_encerramento
+        orm.tolerancia_no_show_minutos = configuracao.tolerancia_no_show_minutos
+        orm.limite_trocas_sem_resolucao = configuracao.limite_trocas_sem_resolucao
         await self._session.commit()
         await self._session.refresh(orm)
         return _to_domain(orm)

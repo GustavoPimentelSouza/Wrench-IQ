@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -13,6 +14,14 @@ class AgendamentoRepository(Protocol):
     async def listar(self) -> list[Agendamento]: ...
 
     async def listar_por_cliente(self, cliente_id: UUID) -> list[Agendamento]: ...
+
+    # Usado por AgendamentoDisponibilidadeUseCases pra calcular quantas
+    # vagas já estão ocupadas num dia, por especialidade.
+    async def listar_por_data(self, data: date) -> list[Agendamento]: ...
+
+    # Usado pelo "worker" de no-show (liberar_no_shows) — agendamentos
+    # ainda AGENDADO/CONFIRMADO cujo horário já passou da tolerância.
+    async def listar_pendentes_antes_de(self, limite: datetime) -> list[Agendamento]: ...
 
     async def buscar_por_id(self, agendamento_id: UUID) -> Agendamento | None: ...
 

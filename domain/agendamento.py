@@ -1,7 +1,9 @@
 import enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
+
+from domain.especialidade import Especialidade
 
 
 class StatusAgendamento(str, enum.Enum):
@@ -9,6 +11,12 @@ class StatusAgendamento(str, enum.Enum):
     CONFIRMADO = "confirmado"
     CANCELADO = "cancelado"
     CONCLUIDO = "concluido"
+    # Passou da tolerância de no-show (ConfiguracaoOficina.tolerancia_no_
+    # show_minutos) sem o cliente aparecer — liberado automaticamente por
+    # AgendamentoDisponibilidadeUseCases.liberar_no_shows. Diferente de
+    # CANCELADO: aqui é a oficina que constatou a ausência, não o cliente
+    # que desistiu — útil separar pra métricas de no-show no futuro.
+    NAO_COMPARECEU = "nao_compareceu"
 
 
 @dataclass
@@ -26,3 +34,8 @@ class Agendamento:
     status: StatusAgendamento
     criado_em: datetime
     descricao: str | None = None
+    # N:N — a IA classifica pelo relato do cliente (ver conversa_prompts.py).
+    # Pode conter Especialidade.INDEFINIDO de verdade (persistido como está,
+    # nunca convertido na criação) — só a busca de disponibilidade trata
+    # isso como MECANICA_GERAL (ver domain/especialidade.py).
+    especialidades: list[Especialidade] = field(default_factory=list)

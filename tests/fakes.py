@@ -49,17 +49,24 @@ class FakeChatService:
     "o modelo decidiu chamar criar_pedido" sem depender do Groq de verdade.
     `ferramentas_recebidas` grava o que cada chamada recebeu, pra testes
     conferirem ex: "na categoria dano_estrutural, criar_pedido nunca pode
-    estar na lista de ferramentas oferecidas".
+    estar na lista de ferramentas oferecidas". `forcar_recebidos` grava o
+    valor de `forcar_ferramenta` de cada chamada, pra testes conferirem
+    quando o tool_choice="required" deveria (ou não) ter sido pedido.
     """
 
     def __init__(self, respostas: list[RespostaChat] | None = None):
         self._fila = list(respostas) if respostas else None
         self.ferramentas_recebidas: list[list[dict[str, Any]]] = []
+        self.forcar_recebidos: list[bool] = []
 
     async def gerar_resposta(
-        self, mensagens: list[dict[str, Any]], ferramentas_disponiveis: list[dict[str, Any]]
+        self,
+        mensagens: list[dict[str, Any]],
+        ferramentas_disponiveis: list[dict[str, Any]],
+        forcar_ferramenta: bool = False,
     ) -> RespostaChat:
         self.ferramentas_recebidas.append(ferramentas_disponiveis)
+        self.forcar_recebidos.append(forcar_ferramenta)
         if self._fila:
             return self._fila.pop(0)
         ultima = mensagens[-1]["content"]
@@ -79,16 +86,23 @@ class FakeChatServiceComErro:
 
 class FakePecaRepository:
     """Test double de application.peca_repository.PecaRepository — só os
-    dois métodos que ConversaUseCases usa de verdade."""
+    métodos que ConversaUseCases usa de verdade. `sugestoes` simula o
+    resultado do limite mais largo (sugerir_por_nome_aproximado) —
+    default vazio, pra testes existentes de "nada encontrado" continuarem
+    valendo sem precisar passar esse argumento."""
 
-    def __init__(self, pecas: list[Peca] | None = None):
+    def __init__(self, pecas: list[Peca] | None = None, sugestoes: list[Peca] | None = None):
         self._pecas = pecas or []
+        self._sugestoes = sugestoes or []
 
     async def buscar_por_nome_aproximado(self, texto: str) -> list[Peca]:
         return self._pecas
 
+    async def sugerir_por_nome_aproximado(self, texto: str) -> list[Peca]:
+        return self._sugestoes
+
     async def buscar_por_id(self, peca_id: Any) -> Peca | None:
-        return next((p for p in self._pecas if p.id == peca_id), None)
+        return next((p for p in [*self._pecas, *self._sugestoes] if p.id == peca_id), None)
 
 
 class FakePedidoUseCases:

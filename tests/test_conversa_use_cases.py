@@ -1,11 +1,14 @@
+from dataclasses import replace
 from datetime import datetime, time, timezone
 from decimal import Decimal
 from uuid import uuid4
 
 from application.chat_service import ChamadaFerramenta, RespostaChat
+from application.conversa_prompts import MENSAGEM_LIMITE_TROCAS
 from application.conversa_use_cases import ConversaUseCases
 from application.pedido_use_cases import EstoqueInsuficienteError, TransicaoInvalidaError
 from domain.configuracao_oficina import ConfiguracaoOficina
+from domain.especialidade import Especialidade
 from domain.mensagem import CategoriaMensagem, Mensagem, MotivoAtendimento
 from domain.peca import Peca
 from domain.pedido import Pedido, StatusPedido, TipoEntrega
@@ -65,10 +68,13 @@ def _montar_conversa(
     agendamento_use_cases=None,
     protocolo_use_cases=None,
     pecas=None,
+    sugestoes=None,
 ) -> ConversaUseCases:
     return ConversaUseCases(
         chat_service=chat_service or FakeChatService(),
-        peca_repository=FakePecaRepository(pecas or [_PECA]),
+        peca_repository=FakePecaRepository(
+            pecas if pecas is not None else [_PECA], sugestoes=sugestoes
+        ),
         pedido_use_cases=pedido_use_cases or FakePedidoUseCases(),
         configuracao_oficina_use_cases=FakeConfiguracaoOficinaUseCases(_CONFIG_PADRAO),
         agendamento_use_cases=agendamento_use_cases or FakeAgendamentoUseCases(),
@@ -506,3 +512,418 @@ async def test_consultar_status_protocolo_de_outro_cliente_nao_encontra():
     )
 
     assert "não encontrei" in resultado.texto.lower()
+
+
+async def test_confirmar_encerramento_apos_pedido_nao_chama_ia_nem_cria_pedido_de_novo():
+    # Bug real encontrado em teste manual: cliente confirma "só isso mesmo"
+    # logo depois de um pedido criado, e o modelo chamava criar_pedido de
+    # novo pra mesma compra em vez de encerrar. Isso não pode depender do
+    # modelo acertar — precisa ser decidido antes de chamar a IA.
+    chat = FakeChatService()
+    historico = [
+        Mensagem(
+            id=uuid4(),
+            cliente_id=uuid4(),
+            texto="uma e vou aí retirar na loja",
+            categoria=CategoriaMensagem.CONSULTA_PECA,
+            criado_em=datetime.now(timezone.utc),
+            resposta_ia="Pedido #302 confirmado! Vela de ignição — R$ 22.50.",
+            acao_finalizadora="criar_pedido",
+        )
+    ]
+    conversa = _montar_conversa(chat_service=chat)
+
+    resultado = await conversa.responder(
+        "só isso mesmo", uuid4(), CategoriaMensagem.CONSULTA_PECA, historico=historico
+    )
+
+    assert chat.ferramentas_recebidas == []  # IA nem chegou a ser chamada
+    assert resultado.ferramentas_chamadas == []
+    assert resultado.texto == "Por nada! Qualquer coisa, é só chamar."
+
+
+async def test_confirmar_encerramento_usa_mensagem_configurada_da_oficina():
+    chat = FakeChatService()
+    configuracao = ConfiguracaoOficina(
+        id=1,
+        nome_empresa="Oficina Teste",
+        horario_semana_abertura=time(8, 0),
+        horario_semana_fechamento=time(19, 0),
+        horario_sabado_abertura=time(8, 0),
+        horario_sabado_fechamento=time(18, 0),
+        horario_domingo_abertura=None,
+        horario_domingo_fechamento=None,
+        mensagem_encerramento="Agradecemos seu contato com a Oficina Dugrau!",
+    )
+    conversa = ConversaUseCases(
+        chat_service=chat,
+        peca_repository=FakePecaRepository([_PECA]),
+        pedido_use_cases=FakePedidoUseCases(),
+        configuracao_oficina_use_cases=FakeConfiguracaoOficinaUseCases(configuracao),
+        agendamento_use_cases=FakeAgendamentoUseCases(),
+        protocolo_use_cases=FakeProtocoloUseCases(),
+    )
+    historico = [
+        Mensagem(
+            id=uuid4(),
+            cliente_id=uuid4(),
+            texto="pode agendar pra dia 10",
+            categoria=CategoriaMensagem.AGENDAMENTO,
+            criado_em=datetime.now(timezone.utc),
+            resposta_ia="Visita agendada pra 10/08 às 14h.",
+            acao_finalizadora="agendar_visita",
+        )
+    ]
+
+    resultado = await conversa.responder(
+        "valeu", uuid4(), CategoriaMensagem.AGENDAMENTO, historico=historico
+    )
+
+    assert resultado.texto == "Agradecemos seu contato com a Oficina Dugrau!"
+
+
+async def test_confirmacao_encerramento_sem_acao_anterior_segue_fluxo_normal():
+    # "só isso" sozinho, sem um pedido/agendamento recém-concluído antes,
+    # não deve travar a conversa — só dispara a checagem determinística
+    # nesse cenário específico, não em qualquer "só isso" da vida.
+    chat = FakeChatService()
+    historico = [
+        Mensagem(
+            id=uuid4(),
+            cliente_id=uuid4(),
+            texto="vocês têm pastilha de freio?",
+            categoria=CategoriaMensagem.CONSULTA_PECA,
+            criado_em=datetime.now(timezone.utc),
+            resposta_ia="Ainda não achei — pode confirmar o modelo?",
+            acao_finalizadora=None,
+        )
+    ]
+    conversa = _montar_conversa(chat_service=chat)
+
+    await conversa.responder(
+        "só isso mesmo", uuid4(), CategoriaMensagem.CONSULTA_PECA, historico=historico
+    )
+
+    assert len(chat.ferramentas_recebidas) == 1  # IA foi chamada normalmente
+
+
+async def test_consultar_peca_sem_match_confiante_sugere_parecidas():
+    # Bug real encontrado em teste manual: "vela da fan 106" (erro de
+    # digitação de "fan 160") não batia o limite de confiança e virava
+    # "não encontrei nada", mesmo a peça certa existindo no catálogo. Agora
+    # cai numa lista de sugestão em vez de beco sem saída.
+    chamada = ChamadaFerramenta(
+        id="call_1", nome="consultar_preco_peca", argumentos={"nome": "vela da fan 106"}
+    )
+    chat = FakeChatService(respostas=[RespostaChat(texto=None, chamadas_ferramentas=[chamada])])
+    conversa = _montar_conversa(chat_service=chat, pecas=[], sugestoes=[_PECA])
+
+    resultado = await conversa.responder(
+        "quero uma vela da fan 106", uuid4(), CategoriaMensagem.CONSULTA_PECA
+    )
+
+    assert _PECA.nome in resultado.texto
+    assert str(_PECA.id) in resultado.texto
+    assert "não chame consultar_preco_peca de novo" in resultado.texto
+
+
+async def test_consultar_peca_sem_nenhum_match_mesmo_no_limite_largo_mantem_mensagem_padrao():
+    chamada = ChamadaFerramenta(
+        id="call_1", nome="consultar_preco_peca", argumentos={"nome": "pneu de caminhão"}
+    )
+    chat = FakeChatService(respostas=[RespostaChat(texto=None, chamadas_ferramentas=[chamada])])
+    conversa = _montar_conversa(chat_service=chat, pecas=[], sugestoes=[])
+
+    resultado = await conversa.responder(
+        "quero um pneu de caminhão", uuid4(), CategoriaMensagem.CONSULTA_PECA
+    )
+
+    assert "Nenhuma peça parecida encontrada" in resultado.texto
+
+
+async def test_nao_reenvia_imagem_ja_mostrada_na_conversa():
+    # Bug real encontrado em teste manual: a IA rechamou consultar_preco_peca
+    # pra confirmar a mesma peça em turnos seguidos, e a mesma foto era
+    # reenviada em cada mensagem — poluía o chat sem trazer informação nova.
+    peca_com_imagem = replace(_PECA, imagem_url="https://exemplo.com/paralama.jpg")
+    chamada = ChamadaFerramenta(
+        id="call_1", nome="consultar_preco_peca", argumentos={"nome": "paralama fan 160"}
+    )
+    chat = FakeChatService(respostas=[RespostaChat(texto=None, chamadas_ferramentas=[chamada])])
+    conversa = _montar_conversa(chat_service=chat, pecas=[peca_com_imagem])
+    historico = [
+        Mensagem(
+            id=uuid4(),
+            cliente_id=uuid4(),
+            texto="quero um paralama fan 160",
+            categoria=CategoriaMensagem.CONSULTA_PECA,
+            criado_em=datetime.now(timezone.utc),
+            resposta_ia="Achamos o Paralama (Honda Fan 160). É essa a peça?",
+            imagem_url="https://exemplo.com/paralama.jpg",
+        )
+    ]
+
+    resultado = await conversa.responder(
+        "sim, é essa mesma", uuid4(), CategoriaMensagem.CONSULTA_PECA, historico=historico
+    )
+
+    assert resultado.imagem_url is None
+
+
+async def test_envia_imagem_normalmente_quando_ainda_nao_apareceu_na_conversa():
+    peca_com_imagem = replace(_PECA, imagem_url="https://exemplo.com/paralama.jpg")
+    chamada = ChamadaFerramenta(
+        id="call_1", nome="consultar_preco_peca", argumentos={"nome": "paralama fan 160"}
+    )
+    chat = FakeChatService(respostas=[RespostaChat(texto=None, chamadas_ferramentas=[chamada])])
+    conversa = _montar_conversa(chat_service=chat, pecas=[peca_com_imagem])
+
+    resultado = await conversa.responder(
+        "quero um paralama fan 160", uuid4(), CategoriaMensagem.CONSULTA_PECA
+    )
+
+    assert resultado.imagem_url == "https://exemplo.com/paralama.jpg"
+
+
+async def test_agendar_visita_com_especialidade_unica():
+    chamada = ChamadaFerramenta(
+        id="call_1",
+        nome="agendar_visita",
+        argumentos={
+            "data_hora": "2026-08-10T14:00:00",
+            "descricao": "Honda Fan 160, caiu da moto, guidão entortado",
+            "especialidades": ["funilaria_pintura"],
+        },
+    )
+    chat = FakeChatService(
+        respostas=[
+            RespostaChat(texto=None, chamadas_ferramentas=[chamada]),
+            RespostaChat(texto="Visita agendada pra 10/08 às 14h."),
+        ]
+    )
+    agendamentos = FakeAgendamentoUseCases()
+    conversa = _montar_conversa(chat_service=chat, agendamento_use_cases=agendamentos)
+
+    await conversa.responder(
+        "bati com a moto e o guidão entortou", uuid4(), CategoriaMensagem.DANO_ESTRUTURAL
+    )
+
+    assert agendamentos.ultimo_agendamento.especialidades == [Especialidade.FUNILARIA_PINTURA]
+
+
+async def test_agendar_visita_com_multiplas_especialidades():
+    # Relato com dois problemas juntos (dano visível + elétrico) — a IA
+    # deve incluir as duas especialidades, não só uma.
+    chamada = ChamadaFerramenta(
+        id="call_1",
+        nome="agendar_visita",
+        argumentos={
+            "data_hora": "2026-08-10T14:00:00",
+            "descricao": "bateu o carro e o pisca-pisca parou de funcionar",
+            "especialidades": ["funilaria_pintura", "eletrica"],
+        },
+    )
+    chat = FakeChatService(
+        respostas=[
+            RespostaChat(texto=None, chamadas_ferramentas=[chamada]),
+            RespostaChat(texto="Visita agendada."),
+        ]
+    )
+    agendamentos = FakeAgendamentoUseCases()
+    conversa = _montar_conversa(chat_service=chat, agendamento_use_cases=agendamentos)
+
+    await conversa.responder(
+        "bati o carro e o pisca-pisca parou de funcionar",
+        uuid4(),
+        CategoriaMensagem.DANO_ESTRUTURAL,
+    )
+
+    assert set(agendamentos.ultimo_agendamento.especialidades) == {
+        Especialidade.FUNILARIA_PINTURA,
+        Especialidade.ELETRICA,
+    }
+
+
+async def test_agendar_visita_indefinido_persiste_como_indefinido():
+    # 'indefinido' é um valor de verdade do enum (ver domain/especialidade.py)
+    # — persiste como está. Só a busca de disponibilidade (não a criação)
+    # trata isso como mecânica geral; ver test_agendamentos.py.
+    chamada = ChamadaFerramenta(
+        id="call_1",
+        nome="agendar_visita",
+        argumentos={
+            "data_hora": "2026-08-10T14:00:00",
+            "descricao": "cliente não deu detalhes do problema",
+            "especialidades": ["indefinido"],
+            "confianca": "media",
+        },
+    )
+    chat = FakeChatService(
+        respostas=[
+            RespostaChat(texto=None, chamadas_ferramentas=[chamada]),
+            RespostaChat(texto="Visita agendada."),
+        ]
+    )
+    agendamentos = FakeAgendamentoUseCases()
+    conversa = _montar_conversa(chat_service=chat, agendamento_use_cases=agendamentos)
+
+    await conversa.responder(
+        "quero marcar uma visita", uuid4(), CategoriaMensagem.AGENDAMENTO
+    )
+
+    assert agendamentos.ultimo_agendamento.especialidades == [Especialidade.INDEFINIDO]
+
+
+async def test_agendar_visita_confianca_baixa_forca_indefinido():
+    # Nenhum classificador acerta 100% — quando a própria IA sinaliza baixa
+    # confiança, o sistema ignora a especialidade sugerida e força
+    # indefinido, sem perguntar nada extra ao cliente.
+    chamada = ChamadaFerramenta(
+        id="call_1",
+        nome="agendar_visita",
+        argumentos={
+            "data_hora": "2026-08-10T14:00:00",
+            "descricao": "carro morre sem motivo aparente às vezes",
+            "especialidades": ["mecanica_geral"],
+            "confianca": "baixa",
+        },
+    )
+    chat = FakeChatService(
+        respostas=[
+            RespostaChat(texto=None, chamadas_ferramentas=[chamada]),
+            RespostaChat(texto="Visita agendada."),
+        ]
+    )
+    agendamentos = FakeAgendamentoUseCases()
+    conversa = _montar_conversa(chat_service=chat, agendamento_use_cases=agendamentos)
+
+    await conversa.responder(
+        "meu carro as vezes morre do nada", uuid4(), CategoriaMensagem.AGENDAMENTO
+    )
+
+    assert agendamentos.ultimo_agendamento.especialidades == [Especialidade.INDEFINIDO]
+
+
+async def test_consulta_peca_nunca_oferece_agendar_visita():
+    # A distinção entre "quer comprar peça" e "quer agendar visita" não
+    # depende da IA decidir certo em texto livre — é estrutural: a
+    # categoria consulta_peca simplesmente não tem agendar_visita entre as
+    # ferramentas disponíveis, então não tem como a IA chamar essa
+    # ferramenta por engano só porque o cliente mencionou uma peça.
+    chat = FakeChatService()
+    conversa = _montar_conversa(chat_service=chat)
+
+    await conversa.responder(
+        "quero comprar um paralama", uuid4(), CategoriaMensagem.CONSULTA_PECA
+    )
+
+    ferramentas_oferecidas = _nomes_ferramentas(chat.ferramentas_recebidas[0])
+    assert "agendar_visita" not in ferramentas_oferecidas
+    assert "consultar_preco_peca" in ferramentas_oferecidas
+
+
+def _mensagem_consulta_peca(resposta_ia: str = "Pode me dar mais detalhes?") -> Mensagem:
+    return Mensagem(
+        id=uuid4(),
+        cliente_id=uuid4(),
+        texto="quero uma peça",
+        categoria=CategoriaMensagem.CONSULTA_PECA,
+        criado_em=datetime.now(timezone.utc),
+        resposta_ia=resposta_ia,
+    )
+
+
+async def test_primeira_mensagem_sobre_peca_nao_forca_ferramenta():
+    # Regra "se vago, pergunte antes" continua livre na 1ª mensagem — sem
+    # histórico, não tem o que forçar ainda.
+    chat = FakeChatService()
+    conversa = _montar_conversa(chat_service=chat)
+
+    await conversa.responder("quero uma peça", uuid4(), CategoriaMensagem.CONSULTA_PECA)
+
+    assert chat.forcar_recebidos == [False]
+
+
+async def test_segunda_mensagem_sobre_peca_sem_consulta_real_forca_ferramenta():
+    # Vazamento visto ao vivo: depois de idas e vindas, a IA "confirmou"
+    # que uma peça existe/está em estoque sem NUNCA ter chamado
+    # consultar_preco_peca. A partir da 2ª mensagem do cliente sobre o
+    # assunto, sem nenhum "[peca_id:" no histórico ainda, a próxima
+    # resposta tem que ser obrigatoriamente uma chamada de ferramenta.
+    chat = FakeChatService()
+    conversa = _montar_conversa(chat_service=chat)
+    historico = [_mensagem_consulta_peca(), _mensagem_consulta_peca()]
+
+    await conversa.responder(
+        "é pra fan 160", uuid4(), CategoriaMensagem.CONSULTA_PECA, historico=historico
+    )
+
+    assert chat.forcar_recebidos == [True]
+
+
+async def test_peca_ja_consultada_no_historico_nao_forca_ferramenta():
+    # Assim que uma consulta real já aconteceu (marcador [peca_id: ...] no
+    # histórico), a IA volta a ter liberdade de responder em texto — ela já
+    # tem dado real pra parafrasear, não precisa forçar de novo.
+    chat = FakeChatService()
+    conversa = _montar_conversa(chat_service=chat)
+    historico = [
+        _mensagem_consulta_peca(
+            resposta_ia="Peça mais parecida encontrada: Paralama... [peca_id: abc-123]"
+        )
+    ]
+
+    await conversa.responder(
+        "quero 1, retirada local", uuid4(), CategoriaMensagem.CONSULTA_PECA, historico=historico
+    )
+
+    assert chat.forcar_recebidos == [False]
+
+
+async def test_limite_de_trocas_sem_resolucao_transfere_para_humano():
+    # Nenhuma IA acerta 100% das vezes — depois de N (3, o padrão)
+    # trocas seguidas sem nenhuma ação concluída, corta e transfere pra
+    # humano SEM gastar mais uma chamada de API.
+    chat = FakeChatService()
+    conversa = _montar_conversa(chat_service=chat)
+    historico = [_mensagem_consulta_peca() for _ in range(3)]
+
+    resultado = await conversa.responder(
+        "quero por 64 reais", uuid4(), CategoriaMensagem.CONSULTA_PECA, historico=historico
+    )
+
+    assert chat.ferramentas_recebidas == []  # IA nem chegou a ser chamada
+    assert resultado.texto == MENSAGEM_LIMITE_TROCAS
+    assert resultado.precisa_atendimento_humano is True
+    assert resultado.motivo_atendimento == MotivoAtendimento.LIMITE_TROCAS_ATINGIDO
+
+
+async def test_limite_de_trocas_reseta_apos_acao_concluida():
+    # O contador conta só as trocas DESDE a última ação concluída — uma
+    # compra/agendamento/cancelamento resolvido reseta a contagem pro
+    # próximo assunto, mesmo que o histórico total seja longo.
+    chat = FakeChatService()
+    conversa = _montar_conversa(chat_service=chat)
+    historico = [
+        _mensagem_consulta_peca(),
+        _mensagem_consulta_peca(),
+        Mensagem(
+            id=uuid4(),
+            cliente_id=uuid4(),
+            texto="1, retirada",
+            categoria=CategoriaMensagem.CONSULTA_PECA,
+            criado_em=datetime.now(timezone.utc),
+            resposta_ia="Pedido #1 confirmado!",
+            acao_finalizadora="criar_pedido",
+        ),
+        _mensagem_consulta_peca(),
+    ]
+
+    resultado = await conversa.responder(
+        "quero outra peça", uuid4(), CategoriaMensagem.CONSULTA_PECA, historico=historico
+    )
+
+    # Só 1 troca não resolvida desde a ação concluída — não deveria
+    # transferir, deveria ter chamado a IA normalmente.
+    assert resultado.motivo_atendimento != MotivoAtendimento.LIMITE_TROCAS_ATINGIDO
+    assert chat.ferramentas_recebidas != []

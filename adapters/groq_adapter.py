@@ -53,19 +53,23 @@ class GroqAdapter:
         self._modelo = modelo
 
     async def gerar_resposta(
-        self, mensagens: list[dict[str, Any]], ferramentas_disponiveis: list[dict[str, Any]]
+        self,
+        mensagens: list[dict[str, Any]],
+        ferramentas_disponiveis: list[dict[str, Any]],
+        forcar_ferramenta: bool = False,
     ) -> RespostaChat:
-        escolha = await self._gerar_escolha(mensagens, ferramentas_disponiveis)
+        escolha = await self._gerar_escolha(mensagens, ferramentas_disponiveis, forcar_ferramenta)
         if self._malformada(escolha):
-            # Duas causas cobertas pela mesma checagem: (1) falha de sempre,
-            # o modelo erra a chamada de função e escreve "<function=...>"
-            # cru como texto; (2) vazamento de raciocínio do gpt-oss (ver
+            # Três causas cobertas pela mesma checagem: (1) sem tool_call e
+            # sem texto nenhum — o modelo simplesmente não respondeu; (2) o
+            # modelo erra a chamada de função e escreve "<function=...>" cru
+            # como texto; (3) vazamento de raciocínio do gpt-oss (ver
             # comentário de _REASONING_EFFORT_CHAT acima) — o content final
             # vem com um rascunho anterior colado, sinalizado por uma
-            # sequência longa de pontos. As duas são "a resposta não é o
-            # texto de verdade pro cliente", então o retry serve pras duas —
+            # sequência longa de pontos. As três são "a resposta não é o
+            # texto de verdade pro cliente", então o retry serve pras três —
             # uma segunda tentativa costuma resolver.
-            escolha = await self._gerar_escolha(mensagens, ferramentas_disponiveis)
+            escolha = await self._gerar_escolha(mensagens, ferramentas_disponiveis, forcar_ferramenta)
 
         chamadas = [
             ChamadaFerramenta(
@@ -78,18 +82,30 @@ class GroqAdapter:
         return RespostaChat(texto=escolha.content, chamadas_ferramentas=chamadas)
 
     async def _gerar_escolha(
-        self, mensagens: list[dict[str, Any]], ferramentas_disponiveis: list[dict[str, Any]]
+        self,
+        mensagens: list[dict[str, Any]],
+        ferramentas_disponiveis: list[dict[str, Any]],
+        forcar_ferramenta: bool,
     ):
         try:
-            resposta = await self._chamar(mensagens, ferramentas_disponiveis)
+            resposta = await self._chamar(mensagens, ferramentas_disponiveis, forcar_ferramenta)
         except BadRequestError:
-            resposta = await self._chamar(mensagens, ferramentas_disponiveis)
+            resposta = await self._chamar(mensagens, ferramentas_disponiveis, forcar_ferramenta)
         return resposta.choices[0].message
 
     def _malformada(self, escolha) -> bool:
         conteudo = escolha.content or ""
         if escolha.tool_calls:
             return False
+        # Sem tool_call NENHUMA e sem texto nenhum — visto ao vivo (ex:
+        # cliente manda "ela fica no guidão" e o modelo simplesmente não
+        # responde nada, nem chama ferramenta): sem esse retry, isso caía
+        # direto no fallback genérico pro cliente
+        # (ConversaUseCases.MENSAGEM_FALLBACK_ERRO) sem log nenhum de erro,
+        # porque tecnicamente não é uma exceção — é uma resposta "válida"
+        # só que vazia.
+        if not conteudo:
+            return True
         if "<function" in conteudo:
             return True
         # 6+ pontos seguidos não acontece em português natural — é a
@@ -99,12 +115,19 @@ class GroqAdapter:
         return bool(re.search(r"\.{6,}", conteudo))
 
     async def _chamar(
-        self, mensagens: list[dict[str, Any]], ferramentas_disponiveis: list[dict[str, Any]]
+        self,
+        mensagens: list[dict[str, Any]],
+        ferramentas_disponiveis: list[dict[str, Any]],
+        forcar_ferramenta: bool = False,
     ):
         return await self._client.chat.completions.create(
             model=self._modelo,
             messages=mensagens,
             tools=ferramentas_disponiveis or None,
+            # "required" impede a API de devolver texto puro sem chamar
+            # ferramenta nenhuma — garantia de contrato, não sugestão de
+            # prompt (ver comentário de forcar_ferramenta em chat_service.py).
+            tool_choice="required" if forcar_ferramenta else None,
             temperature=_TEMPERATURE_CHAT,
             reasoning_effort=_REASONING_EFFORT_CHAT,
         )

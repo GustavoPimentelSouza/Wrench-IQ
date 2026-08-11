@@ -3,6 +3,7 @@ from datetime import datetime, time, timezone
 
 from sqlalchemy import (
     Boolean,
+    Column,
     DateTime,
     Enum as SQLEnum,
     ForeignKey,
@@ -10,6 +11,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Table,
     Time,
 )
 from pgvector.sqlalchemy import Vector
@@ -253,3 +255,136 @@ class ConfiguracaoOficinaORM(Base):
     horario_domingo_fechamento: Mapped[time | None] = mapped_column(Time, nullable=True)
     endereco: Mapped[str | None] = mapped_column(String, nullable=True)
     mensagem_encerramento: Mapped[str | None] = mapped_column(String, nullable=True)
+    tolerancia_no_show_minutos: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=20, server_default="20"
+    )
+    limite_trocas_sem_resolucao: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=3, server_default="3"
+    )
+
+
+class ItemAdicionalProtocoloORM(Base):
+    __tablename__ = "itens_adicionais_protocolo"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    protocolo_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("protocolos.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    descricao: Mapped[str] = mapped_column(String, nullable=False)
+    peca_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("pecas.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    valor: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class NotificacaoORM(Base):
+    __tablename__ = "notificacoes"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clientes.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    tipo: Mapped[str] = mapped_column(String, nullable=False)
+    mensagem: Mapped[str] = mapped_column(String, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    enviada: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    enviada_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ListaEsperaAgendamentoORM(Base):
+    __tablename__ = "lista_espera_agendamento"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("clientes.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    especialidade: Mapped[str] = mapped_column(String, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    atendido: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+
+
+class ReclassificacaoEspecialidadeORM(Base):
+    __tablename__ = "reclassificacoes_especialidade"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    protocolo_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("protocolos.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    # Listas guardadas como string separada por vírgula (ex:
+    # "funilaria_pintura,eletrica") — é um registro histórico/log, não uma
+    # relação N:N consultada por item; volume de reclassificação é baixo,
+    # então não compensa outra tabela de junção só pra isso (ver
+    # adapters/sqlalchemy_reclassificacao_repository.py).
+    especialidades_originais: Mapped[str] = mapped_column(String, nullable=False)
+    especialidades_finais: Mapped[str] = mapped_column(String, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+# As 3 tabelas abaixo são N:N puras (só as duas colunas da relação, sem
+# dado próprio) — por isso são Table simples, não uma classe ORM mapeada
+# como as entidades acima. CASCADE em todas: se o registro pai (protocolo,
+# agendamento ou usuário) for excluído, as linhas de especialidade dele não
+# ficam órfãs no banco.
+protocolo_especialidades = Table(
+    "protocolo_especialidades",
+    Base.metadata,
+    Column(
+        "protocolo_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("protocolos.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("especialidade", String, primary_key=True),
+)
+
+agendamento_especialidades = Table(
+    "agendamento_especialidades",
+    Base.metadata,
+    Column(
+        "agendamento_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("agendamentos.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("especialidade", String, primary_key=True),
+)
+
+mecanico_especialidades = Table(
+    "mecanico_especialidades",
+    Base.metadata,
+    Column(
+        "usuario_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("especialidade", String, primary_key=True),
+)

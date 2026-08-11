@@ -45,6 +45,8 @@ app.dependency_overrides[get_embedding_service] = lambda: FakeEmbeddingService()
 # adivinhar a ordem certa de exclusão.
 _TABELAS_DE_TESTE = (
     "movimentacoes_estoque", "pedidos", "mensagens",
+    "itens_adicionais_protocolo", "reclassificacoes_especialidade",
+    "notificacoes", "lista_espera_agendamento",
     "protocolos", "veiculos", "agendamentos", "clientes", "pecas",
 )
 

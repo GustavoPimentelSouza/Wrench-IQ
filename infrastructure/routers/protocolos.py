@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.sqlalchemy_protocolo_repository import SqlAlchemyProtocoloRepository
+from adapters.sqlalchemy_reclassificacao_repository import SqlAlchemyReclassificacaoRepository
 from adapters.sqlalchemy_usuario_repository import SqlAlchemyUsuarioRepository
 from application.protocolo_use_cases import (
     MecanicoInvalidoError,
@@ -15,6 +16,7 @@ from application.protocolo_use_cases import (
     ProtocoloUseCases,
     TransicaoInvalidaError,
 )
+from domain.especialidade import Especialidade
 from domain.protocolo import Protocolo, StatusProtocolo
 from domain.usuario import Usuario
 from infrastructure.db import get_db
@@ -29,6 +31,7 @@ class ProtocoloCreate(BaseModel):
     categoria: str
     descricao: str | None = None
     mecanico_id: UUID | None = None
+    especialidades: list[Especialidade] = []
     # Sem `status`: todo protocolo nasce em AGUARDANDO_APROVACAO.
 
 
@@ -39,11 +42,17 @@ class ProtocoloUpdate(BaseModel):
     mecanico_id: UUID | None = None
     valor_orcamento: Decimal | None = None
     # Também sem `status` — mudar de estado só é possível pelos endpoints
-    # /aprovar, /concluir, /cancelar abaixo.
+    # /aprovar, /concluir, /cancelar abaixo. Especialidade também não muda
+    # por aqui — é o endpoint /reclassificar-especialidade dedicado, pra
+    # não obrigar reenviar todo o resto do protocolo só pra corrigir isso.
 
 
 class ProtocoloCancelamento(BaseModel):
     motivo: str | None = None
+
+
+class ProtocoloReclassificacao(BaseModel):
+    especialidades: list[Especialidade]
 
 
 class ProtocoloOut(BaseModel):
@@ -59,11 +68,14 @@ class ProtocoloOut(BaseModel):
     atualizado_em: datetime
     valor_orcamento: Decimal | None
     motivo_cancelamento: str | None
+    especialidades: list[Especialidade]
 
 
 def get_use_cases(session: AsyncSession = Depends(get_db)) -> ProtocoloUseCases:
     return ProtocoloUseCases(
-        SqlAlchemyProtocoloRepository(session), SqlAlchemyUsuarioRepository(session)
+        SqlAlchemyProtocoloRepository(session),
+        SqlAlchemyUsuarioRepository(session),
+        SqlAlchemyReclassificacaoRepository(session),
     )
 
 
@@ -82,6 +94,7 @@ async def criar_protocolo(
         descricao=payload.descricao,
         mecanico_id=payload.mecanico_id,
         criado_em=datetime.now(timezone.utc),
+        especialidades=payload.especialidades,
     )
     try:
         return await use_cases.criar(protocolo)
@@ -133,6 +146,7 @@ async def atualizar_protocolo(
         mecanico_id=payload.mecanico_id,
         criado_em=existente.criado_em,
         valor_orcamento=payload.valor_orcamento,
+        especialidades=existente.especialidades,
     )
     try:
         atualizada = await use_cases.atualizar(protocolo)
@@ -195,3 +209,20 @@ async def cancelar_protocolo(
         raise HTTPException(
             status_code=409, detail="Protocolo já está concluído ou cancelado"
         )
+
+
+# A IA classifica especialidade só pelo relato do cliente, antes de
+# qualquer avaliação de verdade — esse endpoint é pro mecânico corrigir
+# isso depois de olhar o veículo presencialmente, sem precisar passar pelo
+# formulário genérico de PUT (que exige reenviar todos os outros campos).
+@router.post("/{protocolo_id}/reclassificar-especialidade", response_model=ProtocoloOut)
+async def reclassificar_especialidade_protocolo(
+    protocolo_id: UUID,
+    payload: ProtocoloReclassificacao,
+    use_cases: ProtocoloUseCases = Depends(get_use_cases),
+    _usuario: Usuario = Depends(get_current_user),
+) -> Protocolo:
+    try:
+        return await use_cases.reclassificar_especialidade(protocolo_id, payload.especialidades)
+    except ProtocoloNaoEncontradoError:
+        raise HTTPException(status_code=404, detail="Protocolo não encontrado")

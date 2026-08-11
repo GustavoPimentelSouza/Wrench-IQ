@@ -102,7 +102,9 @@ _AGENDAR_VISITA: dict[str, Any] = {
         "description": (
             "Agenda visita presencial pra avaliar dano estrutural (batida, "
             "amassado, pintura, lanternagem) ou outro serviço mecânico. Só "
-            "chamar após o cliente confirmar data e horário."
+            "chamar após o cliente confirmar data e horário — nunca só "
+            "porque ele mencionou uma peça (isso é consultar_preco_peca, "
+            "não agendamento)."
         ),
         "parameters": {
             "type": "object",
@@ -120,8 +122,47 @@ _AGENDAR_VISITA: dict[str, Any] = {
                         "a conversa inteira."
                     ),
                 },
+                "especialidades": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "funilaria_pintura",
+                            "eletrica",
+                            "mecanica_geral",
+                            "montagem",
+                            "indefinido",
+                        ],
+                    },
+                    "description": (
+                        "Área(s) responsável(is) pelo serviço, pelo relato do "
+                        "cliente — nunca pergunte isso diretamente ao cliente, "
+                        "infira do que ele já contou. funilaria_pintura = dano "
+                        "visível (batida, amassado, pintura, lanternagem); "
+                        "eletrica = luz/sistema elétrico; mecanica_geral = "
+                        "motor/câmbio/suspensão/freios; montagem = pedido "
+                        "explícito de instalação de peça. Pode ter mais de "
+                        "uma (ex: batida com problema elétrico junto). Se "
+                        "genuinamente não der pra inferir, use só "
+                        "['indefinido']."
+                    ),
+                },
+                "confianca": {
+                    "type": "string",
+                    "enum": ["alta", "media", "baixa"],
+                    "description": (
+                        "Sua confiança na(s) especialidade(s) acima, pelo que o "
+                        "cliente relatou. alta = o relato deixa claro qual "
+                        "área (ex: 'bati o carro' = funilaria_pintura óbvio). "
+                        "media = tem indício mas não é 100% certo. baixa = "
+                        "você está chutando entre opções ou o relato é vago "
+                        "demais pra ter certeza — nesse caso pode sugerir uma "
+                        "especialidade específica mesmo assim, o sistema "
+                        "ajusta sozinho quando a confiança é baixa."
+                    ),
+                },
             },
-            "required": ["data_hora", "descricao"],
+            "required": ["data_hora", "descricao", "especialidades", "confianca"],
         },
     },
 }
@@ -181,3 +222,6 @@ def endereco_parece_valido(endereco: str | None) -> bool:
         return False
     texto = endereco.strip()
     return len(texto) >= 10 and any(c.isdigit() for c in texto)
+
+
+    

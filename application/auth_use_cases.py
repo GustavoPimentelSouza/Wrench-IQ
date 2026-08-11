@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from adapters.seguranca import criar_hash_senha, criar_token_acesso, verificar_senha
 from application.usuario_repository import UsuarioRepository
+from domain.especialidade import Especialidade
 from domain.usuario import PapelUsuario, Usuario
 
 
@@ -32,7 +33,12 @@ class AuthUseCases:
         return token, usuario
 
     async def registrar(
-        self, nome: str, email: str, senha: str, papel: PapelUsuario
+        self,
+        nome: str,
+        email: str,
+        senha: str,
+        papel: PapelUsuario,
+        especialidades: list[Especialidade] | None = None,
     ) -> Usuario:
         existente = await self._repository.buscar_por_email(email)
         if existente is not None:
@@ -45,5 +51,9 @@ class AuthUseCases:
             papel=papel,
             ativo=True,
             criado_em=datetime.now(timezone.utc),
+            # Só faz sentido pra papel=MECANICO — pra ADMIN/ATENDENTE fica
+            # sempre vazio, mesmo que alguém mande algo (não é validado
+            # aqui pra não ter que dar erro à toa; simplesmente não é usado).
+            especialidades=especialidades or [] if papel == PapelUsuario.MECANICO else [],
         )
         return await self._repository.criar(usuario)

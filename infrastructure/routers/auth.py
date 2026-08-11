@@ -10,6 +10,7 @@ from application.auth_use_cases import (
     CredenciaisInvalidasError,
     EmailJaCadastradoError,
 )
+from domain.especialidade import Especialidade
 from domain.usuario import PapelUsuario, Usuario
 from infrastructure.db import get_db
 from infrastructure.security_dependencies import exigir_admin
@@ -32,6 +33,8 @@ class RegistrarIn(BaseModel):
     email: str
     senha: str
     papel: PapelUsuario
+    # Só usado quando papel=MECANICO — ignorado (fica vazio) pros outros papéis.
+    especialidades: list[Especialidade] = []
 
 
 class UsuarioOut(BaseModel):
@@ -40,6 +43,7 @@ class UsuarioOut(BaseModel):
     email: str
     papel: PapelUsuario
     ativo: bool
+    especialidades: list[Especialidade]
 
 
 def get_auth_use_cases(session: AsyncSession = Depends(get_db)) -> AuthUseCases:
@@ -70,7 +74,7 @@ async def registrar(
 ) -> UsuarioOut:
     try:
         usuario = await use_cases.registrar(
-            payload.nome, payload.email, payload.senha, payload.papel
+            payload.nome, payload.email, payload.senha, payload.papel, payload.especialidades
         )
     except EmailJaCadastradoError:
         raise HTTPException(
@@ -82,4 +86,5 @@ async def registrar(
         email=usuario.email,
         papel=usuario.papel,
         ativo=usuario.ativo,
+        especialidades=usuario.especialidades,
     )
