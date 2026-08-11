@@ -79,7 +79,12 @@ _PROMPT_BASE = (
     "cor específica cadastrada — quer levar essa mesmo assim?'), nunca só "
     "mencione a falta de cor de passagem, como se fosse um detalhe "
     "qualquer — o cliente pode confirmar sem perceber que não é o que "
-    "pediu.\n"
+    "pediu. NUNCA apresente '2 opções' ou peça pro cliente escolher entre "
+    "'1 ou 2' a partir de uma única chamada de consultar_preco_peca — ela "
+    "sempre devolve UMA peça por vez (a mais parecida), nunca uma lista. Se "
+    "quiser confirmar outra variante, chame a ferramenta de novo com um "
+    "termo mais específico, nunca invente uma segunda opção que a "
+    "ferramenta não te deu.\n"
     "- Só chame criar_pedido após o cliente confirmar peça, quantidade e "
     "tipo de entrega; se envio remoto, peça o endereço antes. Preço sempre "
     "vem da ferramenta, nunca de cabeça. Se o cliente SUGERIR um preço (ex: "
@@ -90,6 +95,14 @@ _PROMPT_BASE = (
     "confirma peça/quantidade/entrega (ex: responde '1', 'pode retirar') — "
     "aí você já tem preço e disponibilidade da consulta anterior na própria "
     "conversa; só repita o resumo e siga pra criar_pedido, sem reconsultar.\n"
+    "- Quando o cliente confirmar a peça, extraia da MESMA mensagem "
+    "qualquer outro dado que ele já tiver dado junto (quantidade, tipo de "
+    "entrega). Ex: 'sim, quero uma' já confirma a peça E a quantidade "
+    "(1) ao mesmo tempo — não pergunte quantidade de novo, só o que "
+    "ainda falta (nesse caso, tipo de entrega). Outro ex: 'quero 2, pode "
+    "ser retirada' já dá os três de uma vez — vá direto pra criar_pedido, "
+    "sem perguntar nada. Nunca peça de novo algo que o cliente já "
+    "respondeu na mesma frase.\n"
     "- Depois de um pedido confirmado, você pergunta se pode ajudar em mais "
     "algo ou finalizar. Se o cliente pedir outra peça/compra, siga o fluxo "
     "normal de novo. Se ele confirmar que não precisa de mais nada (ex: "
@@ -176,6 +189,30 @@ MENSAGEM_SAUDACAO = "Olá! Me conta qual peça você está procurando ou o que v
 def eh_saudacao(mensagem: str) -> bool:
     normalizado = mensagem.strip().lower().rstrip("!?.,")
     return normalizado in _SAUDACOES
+
+
+# Usado só em combinação com "o turno anterior acabou de concluir uma ação"
+# (ver ConversaUseCases.responder) — não é sobre reconhecer despedida em
+# geral, é sobre um caso de altíssima confiança bem específico: cliente
+# confirma que não quer mais nada logo depois de comprar/agendar/cancelar.
+# Igual eh_saudacao, exact-match (não substring) de propósito — substring
+# ("obrigado" aparecendo em qualquer lugar) arriscaria disparar em cima de
+# "obrigado, mas quero mais uma peça", que é o oposto de encerrar.
+_CONFIRMACOES_ENCERRAMENTO = {
+    "isso", "isso mesmo", "só isso", "so isso", "só isso mesmo", "so isso mesmo",
+    "é só isso", "e so isso", "é isso", "e isso", "é isso mesmo", "e isso mesmo",
+    "não, obrigado", "nao, obrigado", "não obrigado", "nao obrigado",
+    "não, obrigada", "nao, obrigada", "não obrigada", "nao obrigada",
+    "não quero mais nada", "nao quero mais nada", "nada mais",
+    "valeu", "obrigado", "obrigada", "pode finalizar", "pode encerrar",
+    "beleza", "blz", "ok", "okay", "certo", "de boa", "show", "isso ai", "isso aí",
+}
+MENSAGEM_ENCERRAMENTO_PADRAO = "Por nada! Qualquer coisa, é só chamar."
+
+
+def eh_confirmacao_encerramento(mensagem: str) -> bool:
+    normalizado = mensagem.strip().lower().rstrip("!?.,")
+    return normalizado in _CONFIRMACOES_ENCERRAMENTO
 
 
 # Regra 4 do CLAUDE.md: reclamação sensível cai pro atendente humano, nunca

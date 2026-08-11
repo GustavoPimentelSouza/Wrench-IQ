@@ -53,3 +53,19 @@ class Mensagem:
     precisa_atendimento_humano: bool = False
     motivo_atendimento: MotivoAtendimento | None = None
     atendimento_resolvido: bool = False
+    # Nome da ferramenta que encerrou o turno (criar_pedido, cancelar_pedido,
+    # agendar_visita, transferir_atendimento) quando a IA de fato executou
+    # uma ação — None quando o turno só foi conversa, sem ação concluída.
+    # Existe pra ConversaUseCases saber, no PRÓXIMO turno, que uma ação
+    # acabou de ser concluída — sem isso, uma confirmação de encerramento
+    # do cliente (ex: "só isso mesmo") logo depois de um pedido criado não
+    # tinha como ser diferenciada de uma mensagem qualquer, e a IA podia
+    # (já vimos acontecer) chamar criar_pedido de novo pra mesma compra.
+    acao_finalizadora: str | None = None
+    # URL da imagem enviada junto da resposta desse turno (se houve). Existe
+    # pra ConversaUseCases conseguir checar, no PRÓXIMO turno, "essa imagem
+    # já apareceu nessa conversa?" — sem isso, cada vez que a IA rechama
+    # consultar_preco_peca pra confirmar a mesma peça (o que já vimos
+    # acontecer), a mesma foto era reenviada, poluindo o chat sem
+    # necessidade.
+    imagem_url: str | None = None

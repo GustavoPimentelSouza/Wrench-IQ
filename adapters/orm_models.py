@@ -95,6 +95,8 @@ class MensagemORM(Base):
     atendimento_resolvido: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    acao_finalizadora: Mapped[str | None] = mapped_column(String, nullable=True)
+    imagem_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class ClienteORM(Base):

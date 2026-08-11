@@ -16,10 +16,12 @@ from application.conversa_ferramentas import (
 )
 from application.conversa_prompts import (
     MAX_RODADAS_FERRAMENTA,
+    MENSAGEM_ENCERRAMENTO_PADRAO,
     MENSAGEM_FALLBACK_ERRO,
     MENSAGEM_PRECO_NAO_VERIFICADO,
     MENSAGEM_SAUDACAO,
     construir_prompt_sistema,
+    eh_confirmacao_encerramento,
     eh_saudacao,
 )
 from application.peca_repository import PecaRepository
@@ -60,6 +62,18 @@ class ResultadoConversa:
     # False. Sem isso, falha técnica e reclamação real ficavam idênticas na
     # fila de atendimento (ver AtendimentoPage), sem jeito de distinguir.
     motivo_atendimento: MotivoAtendimento | None = None
+    # Nome da ferramenta que encerrou o turno (criar_pedido, cancelar_pedido,
+    # agendar_visita), quando foi o caso — persistido em Mensagem.
+    # acao_finalizadora pra ConversaUseCases saber, no PRÓXIMO turno, que
+    # uma ação real acabou de ser concluída (ver responder() abaixo).
+    acao_finalizadora: str | None = None
+
+
+# Ferramentas que representam uma transação concluída de verdade (algo que
+# não pode ser repetido sem querer). transferir_atendimento fica de fora —
+# depois de um handoff pra humano não faz sentido "fechar a conversa" pela
+# IA, então não participa dessa checagem.
+_ACOES_TRANSACIONAIS = {"criar_pedido", "cancelar_pedido", "agendar_visita"}
 
 
 # Único caso de uso que de fato chama ChatService.gerar_resposta() — o
@@ -94,8 +108,26 @@ class ConversaUseCases:
     ) -> ResultadoConversa:
         if eh_saudacao(mensagem):
             return ResultadoConversa(texto=MENSAGEM_SAUDACAO)
+        historico = historico or []
+        # Alta confiança, decidido sem chamar o modelo: cliente confirmando
+        # que não quer mais nada, logo depois de uma ação concluída (pedido
+        # criado, agendamento marcado, etc.). Já vimos o modelo, nesse
+        # exato cenário, chamar criar_pedido de novo pra mesma compra em
+        # vez de encerrar — não é algo que deva depender dele acertar toda
+        # vez, então nem chega a chamar a IA aqui.
+        se_encerrando = (
+            historico
+            and historico[-1].acao_finalizadora in _ACOES_TRANSACIONAIS
+            and eh_confirmacao_encerramento(mensagem)
+        )
+        if se_encerrando:
+            configuracao = await self._configuracao_oficina.buscar()
+            return ResultadoConversa(
+                texto=configuracao.mensagem_encerramento or MENSAGEM_ENCERRAMENTO_PADRAO
+            )
         try:
-            return await self._responder_ou_falhar(mensagem, cliente_id, categoria, historico or [])
+            resultado = await self._responder_ou_falhar(mensagem, cliente_id, categoria, historico)
+            return self._sem_imagem_repetida(resultado, historico)
         except Exception:
             # Sem isso, falha técnica virava caixa-preta: cliente recebia o
             # fallback genérico e ninguém sabia o motivo real — nem dava pra
@@ -197,6 +229,7 @@ class ConversaUseCases:
                         imagem_url=imagem_url,
                         precisa_atendimento_humano=motivo is not None,
                         motivo_atendimento=motivo,
+                        acao_finalizadora=chamada.nome,
                     )
 
         # Esgotou as rodadas sem o modelo parar de pedir ferramenta sozinho —
@@ -218,6 +251,22 @@ class ConversaUseCases:
             precisa_atendimento_humano=sem_resposta_final,
             motivo_atendimento=MotivoAtendimento.FALHA_TECNICA if sem_resposta_final else None,
         )
+
+    def _sem_imagem_repetida(
+        self, resultado: ResultadoConversa, historico: list[Mensagem]
+    ) -> ResultadoConversa:
+        # Bug real encontrado em teste manual: a IA rechamando
+        # consultar_preco_peca pra confirmar a MESMA peça (o que já vimos
+        # acontecer, mesmo com a extração de dados funcionando na maioria
+        # das vezes) reenviava a mesma foto de novo a cada turno, poluindo o
+        # chat sem necessidade. Em vez de confiar que a IA "lembra" que já
+        # mandou a imagem, checa direto contra o histórico persistido — só
+        # sai uma imagem por URL, uma vez, por conversa.
+        if resultado.imagem_url and any(
+            m.imagem_url == resultado.imagem_url for m in historico
+        ):
+            resultado.imagem_url = None
+        return resultado
 
 
 def _mensagem_assistente(resposta: RespostaChat) -> dict[str, Any]:

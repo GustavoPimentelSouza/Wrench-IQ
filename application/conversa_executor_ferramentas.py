@@ -117,11 +117,7 @@ class ExecutorFerramentasConversa:
         termo = argumentos["nome"]
         pecas = await self._pecas.buscar_por_nome_aproximado(termo)
         if not pecas:
-            return (
-                "Nenhuma peça parecida encontrada no catálogo. Pergunte ao "
-                "cliente o nome da peça de outro jeito.",
-                None,
-            )
+            return await self._sugerir_pecas_parecidas(termo)
 
         # Busca semântica sempre devolve o candidato mais próximo (nunca uma
         # garantia exata) — por isso sempre pede confirmação, em vez de tentar
@@ -140,6 +136,32 @@ class ExecutorFerramentasConversa:
             "antes de fechar qualquer venda."
         )
         return texto, peca.imagem_url
+
+    async def _sugerir_pecas_parecidas(self, termo: str) -> tuple[str, str | None]:
+        # Chamado só quando a busca confiante não achou nada — cobre erro de
+        # digitação/nome incompleto (ex: "fan 106" por "fan 160"), que sem
+        # isso virava beco sem saída ("não encontrei, digite o nome exato")
+        # mesmo com a peça certa no catálogo.
+        sugestoes = await self._pecas.sugerir_por_nome_aproximado(termo)
+        if not sugestoes:
+            return (
+                "Nenhuma peça parecida encontrada no catálogo. Pergunte ao "
+                "cliente o nome da peça de outro jeito.",
+                None,
+            )
+        linhas = "\n".join(
+            f"{indice + 1}. {peca.nome} ({peca.marca_modelo_compativel}, "
+            f"{peca.ano_compativel}) [peca_id: {peca.id}]"
+            for indice, peca in enumerate(sugestoes)
+        )
+        texto = (
+            f"Não encontrei '{termo}' com certeza, mas o catálogo tem peças "
+            f"parecidas:\n{linhas}\nPergunte ao cliente qual delas é (pode "
+            "responder o número ou o nome). Quando ele confirmar, use o "
+            "peca_id correspondente direto — não chame consultar_preco_peca "
+            "de novo pra essa mesma peça."
+        )
+        return texto, None
 
     async def _criar_pedido(self, argumentos: dict[str, Any], cliente_id: UUID) -> tuple[str, bool]:
         try:

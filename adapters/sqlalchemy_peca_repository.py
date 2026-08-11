@@ -15,6 +15,14 @@ from domain.peca import Peca
 # busca sempre devolvia o item "menos distante" mesmo quando nada no
 # catálogo tinha a ver com o que o cliente pediu.
 _LIMITE_DISTANCIA_SEMANTICA = 0.35
+# Limite mais largo, só usado como FALLBACK quando a busca confiante acima
+# não acha nada — cobre erro de digitação/nome incompleto (ex: "fan 106" em
+# vez de "fan 160"), que empurra a distância pra perto da fronteira de 0.35
+# e antes virava "não encontrei nada" mesmo com a peça certa no catálogo.
+# Nessa faixa a confiança não é alta o bastante pra confirmar sozinho — por
+# isso vira lista de sugestão (ver ExecutorFerramentasConversa), nunca
+# escolha automática.
+_LIMITE_DISTANCIA_SUGESTAO = 0.55
 
 
 # Traduz PecaORM (SQLAlchemy) <-> Peca (domínio puro). Só esse arquivo
@@ -82,12 +90,22 @@ class SqlAlchemyPecaRepository:
         # "vela" nunca fica próximo de "paralama". Substituiu a busca por
         # palavra-chave (ILIKE), que não generalizava pras várias formas
         # diferentes que um cliente pergunta a mesma coisa.
+        return await self._buscar_por_distancia(texto, _LIMITE_DISTANCIA_SEMANTICA)
+
+    async def sugerir_por_nome_aproximado(self, texto: str) -> list[Peca]:
+        # Mesma busca, limite mais largo — ver comentário de
+        # _LIMITE_DISTANCIA_SUGESTAO. Não filtra os resultados já cobertos
+        # pelo limite confiante porque quem chama isso (o executor) só usa
+        # esse método DEPOIS de buscar_por_nome_aproximado ter voltado vazio.
+        return await self._buscar_por_distancia(texto, _LIMITE_DISTANCIA_SUGESTAO)
+
+    async def _buscar_por_distancia(self, texto: str, limite: float) -> list[Peca]:
         vetor_busca = await self._embeddings.gerar_embedding(texto)
         distancia = PecaORM.embedding.cosine_distance(vetor_busca)
         result = await self._session.execute(
             select(PecaORM)
             .where(PecaORM.embedding.isnot(None))
-            .where(distancia < _LIMITE_DISTANCIA_SEMANTICA)
+            .where(distancia < limite)
             .order_by(distancia)
             .limit(5)
         )

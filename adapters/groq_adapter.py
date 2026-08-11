@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any
 
 from openai import AsyncOpenAI, BadRequestError
@@ -22,6 +23,21 @@ _TEMPERATURE_CHAT = 0.2
 # risco de a mesma mensagem cair em categoria diferente em dois turnos.
 _TEMPERATURE_CLASSIFICACAO = 0
 
+# gpt-oss é um modelo de raciocínio: ele "pensa" internamente antes de
+# responder, e o Groq separa isso num campo `reasoning` à parte do
+# `content` — às vezes essa separação falha e o raciocínio vaza pro
+# `content` final (documentado pelo próprio Groq:
+# https://console.groq.com/docs/reasoning). A primeira tentativa de
+# resolver isso foi baixar pra "low" — só que testamos de verdade (chamada
+# real à API, mesmo cenário de conversa) e "low" piorava um problema maior:
+# o modelo parava de extrair informação que o cliente já tinha dado (ex:
+# "sim, quero uma" já confirma quantidade=1, mas em "low" ele perguntava
+# de novo). Com "high", a extração acertou 3/3 e o vazamento não voltou em
+# 3/3 tentativas no cenário que causou o bug original — troca melhor:
+# raciocínio de verdade continua ligado, e o vazamento (raro, não
+# eliminável só por parâmetro) é pego pelo retry em `_malformada` abaixo.
+_REASONING_EFFORT_CHAT = "high"
+
 # O SDK da OpenAI (usado pela Groq) tem default de 600s de timeout — sem
 # sobrescrever isso, um Groq lento/instável deixa o cliente sem resposta
 # nenhuma no WhatsApp por até 10 minutos, sem cair no fallback nem no
@@ -41,10 +57,14 @@ class GroqAdapter:
     ) -> RespostaChat:
         escolha = await self._gerar_escolha(mensagens, ferramentas_disponiveis)
         if self._malformada(escolha):
-            # Mesma falha de sempre (o modelo erra a chamada de função), só
-            # que dessa vez sem levantar erro — ele escreve o
-            # "<function=...>" cru como se fosse texto de resposta. Uma
-            # segunda tentativa costuma resolver, igual o caso do BadRequestError.
+            # Duas causas cobertas pela mesma checagem: (1) falha de sempre,
+            # o modelo erra a chamada de função e escreve "<function=...>"
+            # cru como texto; (2) vazamento de raciocínio do gpt-oss (ver
+            # comentário de _REASONING_EFFORT_CHAT acima) — o content final
+            # vem com um rascunho anterior colado, sinalizado por uma
+            # sequência longa de pontos. As duas são "a resposta não é o
+            # texto de verdade pro cliente", então o retry serve pras duas —
+            # uma segunda tentativa costuma resolver.
             escolha = await self._gerar_escolha(mensagens, ferramentas_disponiveis)
 
         chamadas = [
@@ -67,7 +87,16 @@ class GroqAdapter:
         return resposta.choices[0].message
 
     def _malformada(self, escolha) -> bool:
-        return not escolha.tool_calls and "<function" in (escolha.content or "")
+        conteudo = escolha.content or ""
+        if escolha.tool_calls:
+            return False
+        if "<function" in conteudo:
+            return True
+        # 6+ pontos seguidos não acontece em português natural — é a
+        # assinatura visual do vazamento de raciocínio (rascunho + resposta
+        # real colados). Checagem de formato, não de conteúdo — pega
+        # qualquer pergunta, não só a de quantidade que motivou isso.
+        return bool(re.search(r"\.{6,}", conteudo))
 
     async def _chamar(
         self, mensagens: list[dict[str, Any]], ferramentas_disponiveis: list[dict[str, Any]]
@@ -77,6 +106,7 @@ class GroqAdapter:
             messages=mensagens,
             tools=ferramentas_disponiveis or None,
             temperature=_TEMPERATURE_CHAT,
+            reasoning_effort=_REASONING_EFFORT_CHAT,
         )
 
 
@@ -99,9 +129,17 @@ _PROMPT_CLASSIFICACAO = (
     "lateral', 'preciso consertar depois de uma batida', 'caí de moto e o "
     "guidão entortou todo', 'capotei e quebrou tudo', 'derrubei a moto e "
     "quebrou o retrovisor na queda'. Vale pra carro E moto, qualquer "
-    "relato de acidente/queda com dano físico. IMPORTANTE: só é essa "
-    "categoria se o cliente estiver pedindo avaliação de um dano — só "
-    "pedir a peça pra comprar (mesmo de lataria) é sempre consulta_peca.\n"
+    "relato de acidente/queda com dano físico — TAMBÉM vale quando quem "
+    "bateu foi outra pessoa (esposa, filho, funcionário, etc.), não só "
+    "quando o cliente bateu ele mesmo: o que importa é que o VEÍCULO "
+    "dele está danificado por um acidente, não quem estava dirigindo. Ex: "
+    "'minha esposa bateu o carro e quebrou o para-choque', 'meu filho "
+    "derrubou a moto e quebrou o retrovisor', 'o motorista bateu atrás e "
+    "amassou a lataria' são todos dano_estrutural, igual se o próprio "
+    "cliente tivesse batido. IMPORTANTE: só é essa categoria se o cliente "
+    "estiver pedindo avaliação de um dano — só pedir a peça pra comprar "
+    "(mesmo de lataria), sem relatar acidente nenhum, é sempre "
+    "consulta_peca.\n"
     "- agendamento: cliente quer marcar uma visita/horário.\n"
     "- status_protocolo: pergunta sobre andamento de um serviço já em execução.\n"
     "- reclamacao_sensivel: cliente insatisfeito, reclamando, ou assunto grave/sensível.\n"

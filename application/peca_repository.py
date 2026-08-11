@@ -18,8 +18,15 @@ class PecaRepository(Protocol):
     async def buscar_por_id(self, peca_id: UUID) -> Peca | None: ...
 
     # Usado pela ferramenta de tool calling "consultar_preco_peca" — busca
-    # livre por nome, sem RAG/pgvector ainda (isso é etapa futura do CLAUDE.md).
+    # semântica (pgvector) com corte de confiança alto: só devolve algo
+    # quando a distância indica que é praticamente a mesma peça.
     async def buscar_por_nome_aproximado(self, texto: str) -> list[Peca]: ...
+
+    # Fallback de buscar_por_nome_aproximado quando ela não acha nada — corte
+    # mais largo, pra cobrir erro de digitação/nome incompleto sem confirmar
+    # a peça sozinho (vira lista de sugestão pro cliente escolher, ver
+    # ExecutorFerramentasConversa._consultar_preco_peca).
+    async def sugerir_por_nome_aproximado(self, texto: str) -> list[Peca]: ...
 
     async def atualizar(self, peca: Peca) -> Peca | None: ...
 

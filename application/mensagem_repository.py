@@ -16,7 +16,13 @@ class MensagemRepository(Protocol):
     # o histórico de conversa antes de chamar a IA.
     async def listar_por_cliente(self, cliente_id: UUID, limit: int) -> list[Mensagem]: ...
 
-    async def registrar_resposta(self, mensagem_id: UUID, resposta: str) -> None: ...
+    async def registrar_resposta(
+        self,
+        mensagem_id: UUID,
+        resposta: str,
+        acao_finalizadora: str | None = None,
+        imagem_url: str | None = None,
+    ) -> None: ...
 
     # Regra 4 do CLAUDE.md (reclamação sensível/falha técnica/pedido da IA →
     # humano). marcar_atendimento_resolvido é o staff dando baixa depois de

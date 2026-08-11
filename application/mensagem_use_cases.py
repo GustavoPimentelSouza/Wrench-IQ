@@ -34,8 +34,16 @@ class MensagemUseCases:
     async def listar_recentes(self, cliente_id: UUID, limit: int = 6) -> list[Mensagem]:
         return await self._repository.listar_por_cliente(cliente_id, limit)
 
-    async def registrar_resposta(self, mensagem_id: UUID, resposta: str) -> None:
-        await self._repository.registrar_resposta(mensagem_id, resposta)
+    async def registrar_resposta(
+        self,
+        mensagem_id: UUID,
+        resposta: str,
+        acao_finalizadora: str | None = None,
+        imagem_url: str | None = None,
+    ) -> None:
+        await self._repository.registrar_resposta(
+            mensagem_id, resposta, acao_finalizadora, imagem_url
+        )
 
     # Chamado por ConversaUseCases quando a IA não consegue responder de
     # verdade, ou pede transferência ela mesma (regra 4) — separado de

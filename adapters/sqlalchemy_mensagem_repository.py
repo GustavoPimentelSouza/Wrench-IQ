@@ -20,6 +20,8 @@ def _to_domain(orm: MensagemORM) -> Mensagem:
             MotivoAtendimento(orm.motivo_atendimento) if orm.motivo_atendimento else None
         ),
         atendimento_resolvido=orm.atendimento_resolvido,
+        acao_finalizadora=orm.acao_finalizadora,
+        imagem_url=orm.imagem_url,
     )
 
 
@@ -58,11 +60,19 @@ class SqlAlchemyMensagemRepository:
         mensagens = [_to_domain(orm) for orm in result.scalars().all()]
         return list(reversed(mensagens))  # mais antiga primeiro, pra virar histórico
 
-    async def registrar_resposta(self, mensagem_id: UUID, resposta: str) -> None:
+    async def registrar_resposta(
+        self,
+        mensagem_id: UUID,
+        resposta: str,
+        acao_finalizadora: str | None = None,
+        imagem_url: str | None = None,
+    ) -> None:
         orm = await self._session.get(MensagemORM, mensagem_id)
         if orm is None:
             return
         orm.resposta_ia = resposta
+        orm.acao_finalizadora = acao_finalizadora
+        orm.imagem_url = imagem_url
         await self._session.commit()
 
     # orm is None é silencioso (não levanta erro) igual registrar_resposta
