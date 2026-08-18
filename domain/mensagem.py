@@ -1,5 +1,5 @@
 import enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
@@ -78,3 +78,12 @@ class Mensagem:
     # acontecer), a mesma foto era reenviada, poluindo o chat sem
     # necessidade.
     imagem_url: str | None = None
+    # Nomes das ferramentas chamadas nesse turno (ex: ["consultar_preco_peca"]),
+    # gravado direto do que o código de fato executou — NUNCA inferido do
+    # texto da resposta. Existe porque a IA reescreve/parafraseia o
+    # resultado da ferramenta antes de responder ao cliente, e um texto
+    # natural nunca preserva um marcador interno tipo "[peca_id: ...]" —
+    # depender de achar esse marcador no histórico (ver ConversaUseCases)
+    # concluía errado que "ainda não consultou nada" e forçava reconsultar
+    # pra sempre, travando a venda antes de chegar em criar_pedido.
+    ferramentas_chamadas: list[str] = field(default_factory=list)

@@ -224,12 +224,15 @@ class ConversaUseCases:
                 mensagens.append({"role": "assistant", "content": anterior.resposta_ia})
         mensagens.append({"role": "user", "content": mensagem})
 
-        # Marcador embutido no texto que consultar_preco_peca devolve (ver
-        # conversa_executor_ferramentas._consultar_preco_peca) — sinal
-        # barato de "uma consulta real ao catálogo já aconteceu nessa
-        # conversa", sem precisar de campo novo no banco.
+        # Direto do log estruturado (Mensagem.ferramentas_chamadas), nunca
+        # inferido do texto — bug real visto ao vivo: a IA parafraseia o
+        # resultado da ferramenta antes de responder ao cliente, e um
+        # marcador interno tipo "[peca_id: ...]" quase nunca sobrevive
+        # nessa reescrita. Checar o texto concluía (errado) "ainda não
+        # consultou nada" e forçava reconsultar pra sempre, sem nunca
+        # deixar a venda chegar em criar_pedido.
         peca_ja_consultada_no_historico = any(
-            "[peca_id:" in (anterior.resposta_ia or "") for anterior in historico
+            "consultar_preco_peca" in anterior.ferramentas_chamadas for anterior in historico
         )
 
         ferramentas_chamadas: list[str] = []

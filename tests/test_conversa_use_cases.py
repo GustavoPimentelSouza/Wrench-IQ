@@ -822,7 +822,9 @@ async def test_consulta_peca_nunca_oferece_agendar_visita():
     assert "consultar_preco_peca" in ferramentas_oferecidas
 
 
-def _mensagem_consulta_peca(resposta_ia: str = "Pode me dar mais detalhes?") -> Mensagem:
+def _mensagem_consulta_peca(
+    resposta_ia: str = "Pode me dar mais detalhes?", ferramentas_chamadas: list[str] | None = None
+) -> Mensagem:
     return Mensagem(
         id=uuid4(),
         cliente_id=uuid4(),
@@ -830,6 +832,7 @@ def _mensagem_consulta_peca(resposta_ia: str = "Pode me dar mais detalhes?") -> 
         categoria=CategoriaMensagem.CONSULTA_PECA,
         criado_em=datetime.now(timezone.utc),
         resposta_ia=resposta_ia,
+        ferramentas_chamadas=ferramentas_chamadas or [],
     )
 
 
@@ -862,14 +865,16 @@ async def test_segunda_mensagem_sobre_peca_sem_consulta_real_forca_ferramenta():
 
 
 async def test_peca_ja_consultada_no_historico_nao_forca_ferramenta():
-    # Assim que uma consulta real já aconteceu (marcador [peca_id: ...] no
-    # histórico), a IA volta a ter liberdade de responder em texto — ela já
-    # tem dado real pra parafrasear, não precisa forçar de novo.
+    # Assim que uma consulta real já aconteceu (ferramentas_chamadas
+    # registrado no histórico — não o texto, que a IA reescreve/parafraseia
+    # e não preserva marcador nenhum), a IA volta a ter liberdade de
+    # responder em texto — ela já tem dado real pra trabalhar em cima.
     chat = FakeChatService()
     conversa = _montar_conversa(chat_service=chat)
     historico = [
         _mensagem_consulta_peca(
-            resposta_ia="Peça mais parecida encontrada: Paralama... [peca_id: abc-123]"
+            resposta_ia="Temos o Paralama (Honda 2020-2025) por R$ 120,00, disponível.",
+            ferramentas_chamadas=["consultar_preco_peca"],
         )
     ]
 

@@ -115,7 +115,11 @@ async def webhook(
         payload.mensagem, cliente.id, mensagem.categoria, historico
     )
     await mensagem_use_cases.registrar_resposta(
-        mensagem.id, resultado.texto, resultado.acao_finalizadora, resultado.imagem_url
+        mensagem.id,
+        resultado.texto,
+        resultado.acao_finalizadora,
+        resultado.imagem_url,
+        resultado.ferramentas_chamadas,
     )
     if resultado.precisa_atendimento_humano:
         # motivo_atendimento sempre vem preenchido junto de

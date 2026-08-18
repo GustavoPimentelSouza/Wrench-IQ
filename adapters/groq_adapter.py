@@ -90,7 +90,15 @@ class GroqAdapter:
         try:
             resposta = await self._chamar(mensagens, ferramentas_disponiveis, forcar_ferramenta)
         except BadRequestError:
-            resposta = await self._chamar(mensagens, ferramentas_disponiveis, forcar_ferramenta)
+            # Visto ao vivo: com tool_choice="required", o modelo pode
+            # genuinamente precisar responder em texto (ex: mais uma
+            # pergunta de esclarecimento, ainda sem informação suficiente
+            # pra chamar a ferramenta de verdade) — a Groq rejeita isso com
+            # 400 (tool_use_failed) em vez de só devolver o texto. A
+            # segunda tentativa libera a resposta (sem forçar), deixando o
+            # modelo fazer a pergunta que precisava fazer — mais uma
+            # rodada forçada acontece no próximo turno se ainda faltar dado.
+            resposta = await self._chamar(mensagens, ferramentas_disponiveis, False)
         return resposta.choices[0].message
 
     def _malformada(self, escolha) -> bool:
@@ -120,15 +128,23 @@ class GroqAdapter:
         ferramentas_disponiveis: list[dict[str, Any]],
         forcar_ferramenta: bool = False,
     ):
+        # A Groq rejeita a requisição inteira (400) se "tool_choice" vier
+        # presente com valor null — só aceita "none"/"auto"/"required" ou o
+        # campo AUSENTE. Por isso o kwarg só entra no dict quando for
+        # realmente forçar; passar tool_choice=None quebrava TODA chamada
+        # não forçada (bug visto ao vivo, achado testando no simulador).
+        kwargs: dict[str, Any] = {}
+        if forcar_ferramenta:
+            # "required" impede a API de devolver texto puro sem chamar
+            # ferramenta nenhuma — garantia de contrato, não sugestão de
+            # prompt (ver comentário de forcar_ferramenta em chat_service.py).
+            kwargs["tool_choice"] = "required"
         return await self._client.chat.completions.create(
             model=self._modelo,
             messages=mensagens,
             tools=ferramentas_disponiveis or None,
-            # "required" impede a API de devolver texto puro sem chamar
-            # ferramenta nenhuma — garantia de contrato, não sugestão de
-            # prompt (ver comentário de forcar_ferramenta em chat_service.py).
-            tool_choice="required" if forcar_ferramenta else None,
             temperature=_TEMPERATURE_CHAT,
+            **kwargs,
             reasoning_effort=_REASONING_EFFORT_CHAT,
         )
 

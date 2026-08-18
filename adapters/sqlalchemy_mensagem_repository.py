@@ -22,6 +22,7 @@ def _to_domain(orm: MensagemORM) -> Mensagem:
         atendimento_resolvido=orm.atendimento_resolvido,
         acao_finalizadora=orm.acao_finalizadora,
         imagem_url=orm.imagem_url,
+        ferramentas_chamadas=orm.ferramentas_chamadas.split(",") if orm.ferramentas_chamadas else [],
     )
 
 
@@ -66,6 +67,7 @@ class SqlAlchemyMensagemRepository:
         resposta: str,
         acao_finalizadora: str | None = None,
         imagem_url: str | None = None,
+        ferramentas_chamadas: list[str] | None = None,
     ) -> None:
         orm = await self._session.get(MensagemORM, mensagem_id)
         if orm is None:
@@ -73,6 +75,7 @@ class SqlAlchemyMensagemRepository:
         orm.resposta_ia = resposta
         orm.acao_finalizadora = acao_finalizadora
         orm.imagem_url = imagem_url
+        orm.ferramentas_chamadas = ",".join(ferramentas_chamadas) if ferramentas_chamadas else None
         await self._session.commit()
 
     # orm is None é silencioso (não levanta erro) igual registrar_resposta

@@ -99,6 +99,9 @@ class MensagemORM(Base):
     )
     acao_finalizadora: Mapped[str | None] = mapped_column(String, nullable=True)
     imagem_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Comma-joined (ex: "consultar_preco_peca") — log estruturado do que
+    # realmente rodou nesse turno, não inferido do texto (ver domain/mensagem.py).
+    ferramentas_chamadas: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class ClienteORM(Base):

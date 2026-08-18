@@ -40,9 +40,10 @@ class MensagemUseCases:
         resposta: str,
         acao_finalizadora: str | None = None,
         imagem_url: str | None = None,
+        ferramentas_chamadas: list[str] | None = None,
     ) -> None:
         await self._repository.registrar_resposta(
-            mensagem_id, resposta, acao_finalizadora, imagem_url
+            mensagem_id, resposta, acao_finalizadora, imagem_url, ferramentas_chamadas
         )
 
     # Chamado por ConversaUseCases quando a IA não consegue responder de

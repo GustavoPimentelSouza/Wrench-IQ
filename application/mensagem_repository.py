@@ -22,6 +22,7 @@ class MensagemRepository(Protocol):
         resposta: str,
         acao_finalizadora: str | None = None,
         imagem_url: str | None = None,
+        ferramentas_chamadas: list[str] | None = None,
     ) -> None: ...
 
     # Regra 4 do CLAUDE.md (reclamação sensível/falha técnica/pedido da IA →
