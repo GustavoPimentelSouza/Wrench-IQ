@@ -32,11 +32,6 @@ _TRANSICOES_VALIDAS: dict[StatusProtocolo, set[StatusProtocolo]] = {
         StatusProtocolo.CANCELADO,
     },
     StatusProtocolo.EM_EXECUCAO: {StatusProtocolo.PRONTO, StatusProtocolo.CANCELADO},
-    # Entra/sai desse estado só via ItemAdicionalUseCases (registrar leva
-    # aqui; aprovar/recusar tiram daqui) — por isso o único destino válido
-    # pelas transições genéricas abaixo (aprovar/concluir/cancelar) é
-    # cancelar o serviço inteiro enquanto o item ainda está pendente.
-    StatusProtocolo.AGUARDANDO_APROVACAO_ADICIONAL: {StatusProtocolo.CANCELADO},
     StatusProtocolo.PRONTO: set(),
     StatusProtocolo.CANCELADO: set(),
 }

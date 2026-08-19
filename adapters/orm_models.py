@@ -266,30 +266,6 @@ class ConfiguracaoOficinaORM(Base):
     )
 
 
-class ItemAdicionalProtocoloORM(Base):
-    __tablename__ = "itens_adicionais_protocolo"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    protocolo_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("protocolos.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
-    descricao: Mapped[str] = mapped_column(String, nullable=False)
-    peca_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("pecas.id", ondelete="RESTRICT"),
-        nullable=True,
-    )
-    valor: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-    status: Mapped[str] = mapped_column(String, nullable=False)
-    criado_em: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
-
-
 class NotificacaoORM(Base):
     __tablename__ = "notificacoes"
 
