@@ -46,7 +46,6 @@ app.dependency_overrides[get_embedding_service] = lambda: FakeEmbeddingService()
 _TABELAS_DE_TESTE = (
     "movimentacoes_estoque", "pedidos", "mensagens",
     "reclassificacoes_especialidade",
-    "notificacoes", "lista_espera_agendamento",
     "protocolos", "veiculos", "agendamentos", "clientes", "pecas",
 )
 

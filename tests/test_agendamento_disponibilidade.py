@@ -4,15 +4,11 @@ from datetime import date, datetime, time, timedelta, timezone
 from adapters.orm_models import ClienteORM
 from adapters.seguranca import criar_hash_senha
 from adapters.sqlalchemy_agendamento_repository import SqlAlchemyAgendamentoRepository
-from adapters.sqlalchemy_lista_espera_repository import SqlAlchemyListaEsperaRepository
-from adapters.sqlalchemy_notificacao_repository import SqlAlchemyNotificacaoRepository
 from adapters.sqlalchemy_usuario_repository import SqlAlchemyUsuarioRepository
 from application.agendamento_disponibilidade_use_cases import AgendamentoDisponibilidadeUseCases
-from application.notificacao_use_cases import NotificacaoUseCases
 from domain.agendamento import Agendamento, StatusAgendamento
 from domain.configuracao_oficina import ConfiguracaoOficina
 from domain.especialidade import Especialidade
-from domain.notificacao import TipoNotificacao
 from domain.usuario import PapelUsuario, Usuario
 from tests.conftest import TestSessionLocal
 
@@ -65,8 +61,6 @@ def _use_cases(session) -> AgendamentoDisponibilidadeUseCases:
     return AgendamentoDisponibilidadeUseCases(
         SqlAlchemyAgendamentoRepository(session),
         SqlAlchemyUsuarioRepository(session),
-        SqlAlchemyListaEsperaRepository(session),
-        NotificacaoUseCases(SqlAlchemyNotificacaoRepository(session)),
     )
 
 
@@ -129,45 +123,3 @@ async def test_disponibilidade_sem_vaga_sempre_traz_proxima_data():
     # data disponível junto (terça, mesmo mecânico, ainda sem agendamento).
     assert resultado.proxima_data_disponivel == data + timedelta(days=1)
     assert resultado.proximos_horarios
-
-
-async def test_no_show_libera_horario_e_notifica_lista_de_espera():
-    cliente_agendado = await _criar_cliente()
-    cliente_espera = await _criar_cliente()
-
-    async with TestSessionLocal() as session:
-        repository = SqlAlchemyAgendamentoRepository(session)
-        agendamento = await repository.criar(
-            Agendamento(
-                id=uuid.uuid4(),
-                cliente_id=cliente_agendado,
-                # 1h no passado — já passou da tolerância padrão de 20min.
-                data_hora=datetime.now(timezone.utc) - timedelta(hours=1),
-                status=StatusAgendamento.AGENDADO,
-                criado_em=datetime.now(timezone.utc),
-                especialidades=[Especialidade.ELETRICA],
-            )
-        )
-
-        use_cases = _use_cases(session)
-        await use_cases.entrar_na_lista_de_espera(cliente_espera, Especialidade.ELETRICA)
-
-        liberados = await use_cases.liberar_no_shows(_CONFIGURACAO)
-
-        assert len(liberados) == 1
-        assert liberados[0].id == agendamento.id
-        assert liberados[0].status == StatusAgendamento.NAO_COMPARECEU
-
-        # Vaga oferecida pro primeiro (e único) da lista de espera daquela
-        # especialidade — mesma infra de notificação do item adicional.
-        notificacoes = await NotificacaoUseCases(
-            SqlAlchemyNotificacaoRepository(session)
-        ).listar_pendentes()
-        notificacao = next(n for n in notificacoes if n.cliente_id == cliente_espera)
-        assert notificacao.tipo == TipoNotificacao.LISTA_ESPERA_VAGA_DISPONIVEL
-
-        # Já foi atendido -> não aparece mais como próximo pendente.
-        proximo = await SqlAlchemyListaEsperaRepository(session).buscar_primeiro_pendente(
-            Especialidade.ELETRICA
-        )
-        assert proximo is None

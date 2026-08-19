@@ -266,44 +266,6 @@ class ConfiguracaoOficinaORM(Base):
     )
 
 
-class NotificacaoORM(Base):
-    __tablename__ = "notificacoes"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    cliente_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("clientes.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
-    tipo: Mapped[str] = mapped_column(String, nullable=False)
-    mensagem: Mapped[str] = mapped_column(String, nullable=False)
-    criado_em: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
-    enviada: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    enviada_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-
-class ListaEsperaAgendamentoORM(Base):
-    __tablename__ = "lista_espera_agendamento"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    cliente_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("clientes.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
-    especialidade: Mapped[str] = mapped_column(String, nullable=False)
-    criado_em: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
-    atendido: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-
-
 class ReclassificacaoEspecialidadeORM(Base):
     __tablename__ = "reclassificacoes_especialidade"
 
