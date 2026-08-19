@@ -12,8 +12,8 @@ class ReclassificacaoEspecialidade:
     veículo presencialmente (ver ProtocoloUseCases.reclassificar_
     especialidade). Nenhum classificador acerta 100% do volume e da
     variedade real de mensagens de produção — esse histórico é o dado bruto
-    pra medir isso na prática (ver GET /relatorios/taxa-reclassificacao) e,
-    com o tempo, virar eval set de verdade e apontar padrões que merecem
+    pra medir isso na prática e, com o tempo, virar eval set de verdade e
+    apontar padrões que merecem
     virar atalho determinístico na camada de palavra-chave/prompt (ver
     conversa_prompts.py) em vez de depender só do modelo.
     """

@@ -101,8 +101,8 @@ class ProtocoloUseCases:
         atualizado = await self._repository.atualizar(protocolo)
         assert atualizado is not None
         # Nenhum classificador acerta 100% do volume real de mensagens — esse
-        # registro é o dado bruto de onde a IA está errando (ver GET
-        # /relatorios/taxa-reclassificacao e domain/reclassificacao_especialidade.py).
+        # registro é o dado bruto de onde a IA está errando (ver
+        # domain/reclassificacao_especialidade.py).
         # Grava sempre, mesmo se o mecânico "reclassificar" pro mesmo valor
         # (não filtra por "mudou de verdade?") — simplicidade > otimizar um
         # caso raro que não atrapalha a métrica de qualquer jeito.

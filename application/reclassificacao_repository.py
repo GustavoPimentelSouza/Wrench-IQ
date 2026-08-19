@@ -9,8 +9,7 @@ class ReclassificacaoRepository(Protocol):
         self, reclassificacao: ReclassificacaoEspecialidade
     ) -> ReclassificacaoEspecialidade: ...
 
-    # Usado por RelatorioUseCases.taxa_reclassificacao — período inclusivo
-    # dos dois lados.
+    # Período inclusivo dos dois lados.
     async def listar_por_periodo(
         self, inicio: date, fim: date
     ) -> list[ReclassificacaoEspecialidade]: ...
