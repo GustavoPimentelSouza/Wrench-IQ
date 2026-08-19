@@ -205,6 +205,17 @@ MENSAGEM_PRECO_NAO_VERIFICADO = (
     "o nome exato da peça que você quer que eu confiro certinho."
 )
 
+# Guardrail de "promessa não cumprida" — a IA anuncia um dado ("Segue o
+# endereço:", "horário:") e não entrega o valor de verdade na sequência
+# (resposta cortada, mal formada, ou o modelo "esqueceu" de preencher).
+# Passar isso pro cliente do jeito que veio é pior que admitir que precisa
+# confirmar de novo — por isso troca por um pedido de confirmação, nunca
+# manda o texto quebrado adiante (ver conversa_use_cases.py).
+MENSAGEM_PROMESSA_NAO_CUMPRIDA = (
+    "Deixa eu confirmar essa informação direito antes de te passar — um "
+    "atendente vai revisar e te retornar em instantes."
+)
+
 # Limite de segurança pro loop de tool calling (ex: consultar preço, depois
 # criar pedido, são duas rodadas) — nunca deixa entrar num loop infinito se o
 # modelo insistir em pedir ferramenta pra sempre.

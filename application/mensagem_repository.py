@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -13,8 +14,11 @@ class MensagemRepository(Protocol):
     async def buscar_por_id(self, mensagem_id: UUID) -> Mensagem | None: ...
 
     # Últimas mensagens do cliente, mais antiga primeiro — usado pra montar
-    # o histórico de conversa antes de chamar a IA.
-    async def listar_por_cliente(self, cliente_id: UUID, limit: int) -> list[Mensagem]: ...
+    # o histórico de conversa antes de chamar a IA. `desde` (opcional) corta
+    # mensagens mais antigas que essa data — ver MensagemUseCases.listar_recentes.
+    async def listar_por_cliente(
+        self, cliente_id: UUID, limit: int, desde: datetime | None = None
+    ) -> list[Mensagem]: ...
 
     async def registrar_resposta(
         self,

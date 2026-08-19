@@ -20,6 +20,7 @@ from application.conversa_prompts import (
     MENSAGEM_FALLBACK_ERRO,
     MENSAGEM_LIMITE_TROCAS,
     MENSAGEM_PRECO_NAO_VERIFICADO,
+    MENSAGEM_PROMESSA_NAO_CUMPRIDA,
     MENSAGEM_SAUDACAO,
     construir_prompt_sistema,
     eh_confirmacao_encerramento,
@@ -47,6 +48,29 @@ def _cita_preco_sem_verificar(texto: str, ferramentas_chamadas: list[str]) -> bo
     return not ferramentas_chamadas and bool(_PADRAO_PRECO.search(texto))
 
 
+# Guardrail de "promessa não cumprida" — mesmo espírito de baixo custo e
+# escopo estreito de _cita_preco_sem_verificar acima: regex simples,
+# determinística, sem chamada de API extra. Pega um rótulo comum de
+# resposta de atendimento ("endereço:", "horário:", "valor:"...) seguido
+# de NADA (fim da mensagem ou pontuação de fechamento) — sinal de resposta
+# cortada ou mal formada, onde a IA anunciou um dado e não entregou.
+# Limitação conhecida: só pega "rótulo sem valor nenhum"; não detecta
+# "rótulo seguido de texto irrelevante" (isso exigiria entender o
+# CONTEÚDO, não só o formato) — se isso se mostrar necessário, o próximo
+# passo é uma segunda chamada de LLM barata/determinística (temperatura 0)
+# só pra essa checagem, testada como A/B no eval set antes de virar padrão.
+_PADRAO_PROMESSA_SEM_DADO = re.compile(
+    r"\b(segue\s+(o|a)\s+)?"
+    r"(endere[çc]o|hor[áa]rio|valor|pre[çc]o|link(?:\s+de\s+pagamento)?|data|n[uú]mero)"
+    r"\s*:\s*(?:[.,;!?]|$)",
+    re.IGNORECASE,
+)
+
+
+def _promessa_nao_cumprida(texto: str) -> bool:
+    return bool(_PADRAO_PROMESSA_SEM_DADO.search(texto))
+
+
 @dataclass
 class ResultadoConversa:
     """`ferramentas_chamadas` existe pra depuração/simulador — mostra o que a
@@ -69,6 +93,13 @@ class ResultadoConversa:
     # acao_finalizadora pra ConversaUseCases saber, no PRÓXIMO turno, que
     # uma ação real acabou de ser concluída (ver responder() abaixo).
     acao_finalizadora: str | None = None
+    # Trilha legível de cada decisão relevante do pipeline nesse turno
+    # (categoria escolhida, guardrail acionado, ferramenta executada,
+    # motivo de handoff) — não é log de debug solto, é parte do resultado:
+    # existe pra auditoria/explicabilidade (por que o sistema respondeu
+    # assim?) e pro relatório do eval set mostrar o "porquê" de cada um
+    # dos 32 casos, não só o resultado final.
+    track_decisoes: list[str] = field(default_factory=list)
 
 
 # Ferramentas que representam uma transação concluída de verdade (algo que
@@ -109,7 +140,10 @@ class ConversaUseCases:
         historico: list[Mensagem] | None = None,
     ) -> ResultadoConversa:
         if eh_saudacao(mensagem):
-            return ResultadoConversa(texto=MENSAGEM_SAUDACAO)
+            return ResultadoConversa(
+                texto=MENSAGEM_SAUDACAO,
+                track_decisoes=["guardrail: saudação pura (atalho determinístico, sem chamar IA)"],
+            )
         historico = historico or []
         configuracao = await self._configuracao_oficina.buscar()
         # Alta confiança, decidido sem chamar o modelo: cliente confirmando
@@ -125,7 +159,11 @@ class ConversaUseCases:
         )
         if se_encerrando:
             return ResultadoConversa(
-                texto=configuracao.mensagem_encerramento or MENSAGEM_ENCERRAMENTO_PADRAO
+                texto=configuracao.mensagem_encerramento or MENSAGEM_ENCERRAMENTO_PADRAO,
+                track_decisoes=[
+                    "guardrail: confirmação de encerramento após ação concluída "
+                    "(atalho determinístico, sem chamar IA)"
+                ],
             )
         # Nenhuma IA acerta 100% das vezes — depois de N trocas seguidas sem
         # nenhuma ação concluída (configurável, ver ConfiguracaoOficina.
@@ -148,6 +186,11 @@ class ConversaUseCases:
                 texto=MENSAGEM_LIMITE_TROCAS,
                 precisa_atendimento_humano=True,
                 motivo_atendimento=MotivoAtendimento.LIMITE_TROCAS_ATINGIDO,
+                track_decisoes=[
+                    f"guardrail: limite de trocas sem resolução atingido "
+                    f"({trocas_sem_resolucao}/{configuracao.limite_trocas_sem_resolucao})",
+                    "handoff: transferência automática por limite de trocas sem resolução",
+                ],
             )
         try:
             resultado = await self._responder_ou_falhar(
@@ -163,6 +206,7 @@ class ConversaUseCases:
                 texto=MENSAGEM_FALLBACK_ERRO,
                 precisa_atendimento_humano=True,
                 motivo_atendimento=MotivoAtendimento.FALHA_TECNICA,
+                track_decisoes=["guardrail: falha técnica ao processar mensagem (exceção não tratada)"],
             )
 
     async def _responder_ou_falhar(
@@ -216,6 +260,9 @@ class ConversaUseCases:
         else:
             categoria_efetiva = categoria
             ferramentas = FERRAMENTAS_VENDA
+        track: list[str] = [
+            f"categoria classificada: {categoria.value}; categoria efetiva usada: {categoria_efetiva.value}"
+        ]
         prompt_sistema = construir_prompt_sistema(configuracao, categoria_efetiva)
         mensagens: list[dict[str, Any]] = [{"role": "system", "content": prompt_sistema}]
         for anterior in historico:
@@ -256,27 +303,48 @@ class ConversaUseCases:
                 and not peca_ja_consultada_no_historico
                 and "consultar_preco_peca" not in ferramentas_chamadas
             )
+            if forcar_ferramenta:
+                track.append("guardrail: tool_choice forçado (peça ainda não consultada nessa conversa)")
             resposta = await self._chat.gerar_resposta(mensagens, ferramentas, forcar_ferramenta)
 
             if not resposta.chamadas_ferramentas:
                 if resposta.texto and _cita_preco_sem_verificar(resposta.texto, ferramentas_chamadas):
+                    track.append("guardrail: preço citado sem ferramenta verificada — resposta substituída")
                     return ResultadoConversa(
                         texto=MENSAGEM_PRECO_NAO_VERIFICADO,
                         ferramentas_chamadas=ferramentas_chamadas,
                         imagem_url=imagem_url,
+                        track_decisoes=track,
+                    )
+                if resposta.texto and _promessa_nao_cumprida(resposta.texto):
+                    track.append(
+                        "guardrail: promessa não cumprida (rótulo tipo 'endereço:' sem dado) — "
+                        "resposta substituída, encaminhado pra revisão humana"
+                    )
+                    return ResultadoConversa(
+                        texto=MENSAGEM_PROMESSA_NAO_CUMPRIDA,
+                        ferramentas_chamadas=ferramentas_chamadas,
+                        imagem_url=imagem_url,
+                        precisa_atendimento_humano=True,
+                        motivo_atendimento=MotivoAtendimento.PROMESSA_NAO_CUMPRIDA,
+                        track_decisoes=track,
                     )
                 sem_resposta = not resposta.texto
+                if sem_resposta:
+                    track.append("guardrail: resposta vazia da IA — fallback técnico, encaminhado pra humano")
                 return ResultadoConversa(
                     texto=resposta.texto or MENSAGEM_FALLBACK_ERRO,
                     ferramentas_chamadas=ferramentas_chamadas,
                     imagem_url=imagem_url,
                     precisa_atendimento_humano=sem_resposta,
                     motivo_atendimento=MotivoAtendimento.FALHA_TECNICA if sem_resposta else None,
+                    track_decisoes=track,
                 )
 
             ferramentas_chamadas += [chamada.nome for chamada in resposta.chamadas_ferramentas]
             mensagens.append(_mensagem_assistente(resposta))
             for chamada in resposta.chamadas_ferramentas:
+                track.append(f"ferramenta executada: {chamada.nome}")
                 resultado, url_encontrada, finalizar, motivo = await self._executor.executar(
                     chamada, cliente_id
                 )
@@ -285,6 +353,9 @@ class ConversaUseCases:
                     {"role": "tool", "tool_call_id": chamada.id, "content": resultado}
                 )
                 if finalizar:
+                    track.append(f"ação concluída: {chamada.nome}")
+                    if motivo is not None:
+                        track.append(f"handoff: {motivo.value}")
                     # Pedido criado com sucesso, ou a IA pediu transferência:
                     # manda a resposta direto pro cliente, sem deixar a IA
                     # reescrever — já vimos ela "esquecer" de repassar
@@ -296,26 +367,46 @@ class ConversaUseCases:
                         precisa_atendimento_humano=motivo is not None,
                         motivo_atendimento=motivo,
                         acao_finalizadora=chamada.nome,
+                        track_decisoes=track,
                     )
 
         # Esgotou as rodadas sem o modelo parar de pedir ferramenta sozinho —
         # mas o resultado da última (ex: pedido criado com sucesso) já está
         # no contexto. Uma chamada final sem ferramentas força um resumo em
         # texto, em vez de jogar fora o que já aconteceu.
+        track.append("guardrail: esgotou rodadas de ferramenta, resposta final forçada em texto")
         resposta_final = await self._chat.gerar_resposta(mensagens, [])
         if resposta_final.texto and _cita_preco_sem_verificar(resposta_final.texto, ferramentas_chamadas):
+            track.append("guardrail: preço citado sem ferramenta verificada — resposta substituída")
             return ResultadoConversa(
                 texto=MENSAGEM_PRECO_NAO_VERIFICADO,
                 ferramentas_chamadas=ferramentas_chamadas,
                 imagem_url=imagem_url,
+                track_decisoes=track,
+            )
+        if resposta_final.texto and _promessa_nao_cumprida(resposta_final.texto):
+            track.append(
+                "guardrail: promessa não cumprida (rótulo tipo 'endereço:' sem dado) — "
+                "resposta substituída, encaminhado pra revisão humana"
+            )
+            return ResultadoConversa(
+                texto=MENSAGEM_PROMESSA_NAO_CUMPRIDA,
+                ferramentas_chamadas=ferramentas_chamadas,
+                imagem_url=imagem_url,
+                precisa_atendimento_humano=True,
+                motivo_atendimento=MotivoAtendimento.PROMESSA_NAO_CUMPRIDA,
+                track_decisoes=track,
             )
         sem_resposta_final = not resposta_final.texto
+        if sem_resposta_final:
+            track.append("guardrail: resposta final vazia da IA — fallback técnico, encaminhado pra humano")
         return ResultadoConversa(
             texto=resposta_final.texto or MENSAGEM_FALLBACK_ERRO,
             ferramentas_chamadas=ferramentas_chamadas,
             imagem_url=imagem_url,
             precisa_atendimento_humano=sem_resposta_final,
             motivo_atendimento=MotivoAtendimento.FALHA_TECNICA if sem_resposta_final else None,
+            track_decisoes=track,
         )
 
     def _sem_imagem_repetida(

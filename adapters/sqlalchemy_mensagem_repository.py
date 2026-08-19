@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -51,13 +52,14 @@ class SqlAlchemyMensagemRepository:
         orm = await self._session.get(MensagemORM, mensagem_id)
         return _to_domain(orm) if orm else None
 
-    async def listar_por_cliente(self, cliente_id: UUID, limit: int) -> list[Mensagem]:
-        result = await self._session.execute(
-            select(MensagemORM)
-            .where(MensagemORM.cliente_id == cliente_id)
-            .order_by(MensagemORM.criado_em.desc())
-            .limit(limit)
-        )
+    async def listar_por_cliente(
+        self, cliente_id: UUID, limit: int, desde: datetime | None = None
+    ) -> list[Mensagem]:
+        query = select(MensagemORM).where(MensagemORM.cliente_id == cliente_id)
+        if desde is not None:
+            query = query.where(MensagemORM.criado_em >= desde)
+        query = query.order_by(MensagemORM.criado_em.desc()).limit(limit)
+        result = await self._session.execute(query)
         mensagens = [_to_domain(orm) for orm in result.scalars().all()]
         return list(reversed(mensagens))  # mais antiga primeiro, pra virar histórico
 

@@ -94,6 +94,12 @@ class ResultadoCaso:
     decisao_segura: bool
     motivos_inseguranca: list[str] = field(default_factory=list)
     resposta: str = ""
+    # Trilha de decisão do pipeline (categoria, guardrail acionado,
+    # ferramenta executada, motivo de handoff) — ver ResultadoConversa.
+    # track_decisoes em application/conversa_use_cases.py. Cada um dos 32
+    # casos carrega a sua própria trilha no relatório, pra dar visibilidade
+    # do "porquê" de cada resultado, não só do resultado final.
+    track_decisoes: list[str] = field(default_factory=list)
 
 
 def _montar_pedido_fixture(caso: CasoEval) -> Pedido:
@@ -207,6 +213,7 @@ async def _rodar_caso(caso: CasoEval, classificador: GroqClassificador, chat: Gr
         decisao_segura=len(motivos) == 0,
         motivos_inseguranca=motivos,
         resposta=resultado.texto,
+        track_decisoes=resultado.track_decisoes,
     )
 
 
@@ -237,6 +244,8 @@ def _imprimir_relatorio(resultados: list[ResultadoCaso]) -> None:
             if r.motivos_inseguranca:
                 for motivo in r.motivos_inseguranca:
                     print(f"          motivo: {motivo}")
+            for decisao in r.track_decisoes:
+                print(f"          decisão: {decisao}")
         print()
 
     print("=" * 78)

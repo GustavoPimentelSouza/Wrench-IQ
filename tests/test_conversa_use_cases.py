@@ -4,7 +4,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from application.chat_service import ChamadaFerramenta, RespostaChat
-from application.conversa_prompts import MENSAGEM_LIMITE_TROCAS
+from application.conversa_prompts import MENSAGEM_LIMITE_TROCAS, MENSAGEM_PROMESSA_NAO_CUMPRIDA
 from application.conversa_use_cases import ConversaUseCases
 from application.pedido_use_cases import EstoqueInsuficienteError, TransicaoInvalidaError
 from domain.configuracao_oficina import ConfiguracaoOficina
@@ -886,12 +886,12 @@ async def test_peca_ja_consultada_no_historico_nao_forca_ferramenta():
 
 
 async def test_limite_de_trocas_sem_resolucao_transfere_para_humano():
-    # Nenhuma IA acerta 100% das vezes — depois de N (3, o padrão)
+    # Nenhuma IA acerta 100% das vezes — depois de N (8, o padrão)
     # trocas seguidas sem nenhuma ação concluída, corta e transfere pra
     # humano SEM gastar mais uma chamada de API.
     chat = FakeChatService()
     conversa = _montar_conversa(chat_service=chat)
-    historico = [_mensagem_consulta_peca() for _ in range(3)]
+    historico = [_mensagem_consulta_peca() for _ in range(8)]
 
     resultado = await conversa.responder(
         "quero por 64 reais", uuid4(), CategoriaMensagem.CONSULTA_PECA, historico=historico
@@ -932,3 +932,79 @@ async def test_limite_de_trocas_reseta_apos_acao_concluida():
     # transferir, deveria ter chamado a IA normalmente.
     assert resultado.motivo_atendimento != MotivoAtendimento.LIMITE_TROCAS_ATINGIDO
     assert chat.ferramentas_recebidas != []
+
+
+async def test_promessa_nao_cumprida_endereco_sem_dado_e_substituida():
+    # Guardrail de "promessa não cumprida": rótulo tipo "endereço:" sem o
+    # dado real depois — resposta cortada/mal formada, nunca deve ir pro
+    # cliente do jeito que veio.
+    chat = FakeChatService(
+        respostas=[RespostaChat(texto="Claro! Segue o endereço:")]
+    )
+    conversa = _montar_conversa(chat_service=chat)
+
+    resultado = await conversa.responder(
+        "qual o endereço de vocês?", uuid4(), CategoriaMensagem.DUVIDA_GERAL
+    )
+
+    assert resultado.texto == MENSAGEM_PROMESSA_NAO_CUMPRIDA
+    assert resultado.precisa_atendimento_humano is True
+    assert resultado.motivo_atendimento == MotivoAtendimento.PROMESSA_NAO_CUMPRIDA
+
+
+async def test_promessa_cumprida_com_dado_real_nao_e_bloqueada():
+    # Mesmo rótulo, mas com o dado de verdade na sequência — não é uma
+    # promessa quebrada, não deve disparar o guardrail.
+    chat = FakeChatService(
+        respostas=[RespostaChat(texto="Endereço: Rua das Flores, 123, Centro.")]
+    )
+    conversa = _montar_conversa(chat_service=chat)
+
+    resultado = await conversa.responder(
+        "qual o endereço de vocês?", uuid4(), CategoriaMensagem.DUVIDA_GERAL
+    )
+
+    assert resultado.texto == "Endereço: Rua das Flores, 123, Centro."
+    assert resultado.precisa_atendimento_humano is False
+
+
+async def test_track_decisoes_registra_saudacao():
+    chat = FakeChatService()
+    conversa = _montar_conversa(chat_service=chat)
+
+    resultado = await conversa.responder("oi", uuid4(), CategoriaMensagem.NAO_IDENTIFICADO)
+
+    assert any("saudação" in decisao for decisao in resultado.track_decisoes)
+
+
+async def test_track_decisoes_registra_limite_de_trocas():
+    chat = FakeChatService()
+    conversa = _montar_conversa(chat_service=chat)
+    historico = [_mensagem_consulta_peca() for _ in range(8)]
+
+    resultado = await conversa.responder(
+        "quero por 64 reais", uuid4(), CategoriaMensagem.CONSULTA_PECA, historico=historico
+    )
+
+    assert any("limite de trocas" in decisao for decisao in resultado.track_decisoes)
+    assert any("handoff" in decisao for decisao in resultado.track_decisoes)
+
+
+async def test_track_decisoes_registra_ferramenta_executada():
+    chamada = ChamadaFerramenta(
+        id="call_1", nome="consultar_preco_peca", argumentos={"nome": "paralama"}
+    )
+    chat = FakeChatService(
+        respostas=[
+            RespostaChat(texto=None, chamadas_ferramentas=[chamada]),
+            RespostaChat(texto="Achei o Paralama por R$ 120,00."),
+        ]
+    )
+    conversa = _montar_conversa(chat_service=chat)
+
+    resultado = await conversa.responder(
+        "quero comprar um paralama", uuid4(), CategoriaMensagem.CONSULTA_PECA
+    )
+
+    assert any("consultar_preco_peca" in decisao for decisao in resultado.track_decisoes)
+    assert any("categoria classificada" in decisao for decisao in resultado.track_decisoes)

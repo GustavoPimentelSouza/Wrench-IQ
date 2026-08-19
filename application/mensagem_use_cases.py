@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from application.classificacao_mensagem_service import ClassificadorDeMensagem
@@ -31,8 +31,17 @@ class MensagemUseCases:
         )
         return await self._repository.criar(mensagem)
 
-    async def listar_recentes(self, cliente_id: UUID, limit: int = 6) -> list[Mensagem]:
-        return await self._repository.listar_por_cliente(cliente_id, limit)
+    # Padrão de produção pra controlar tamanho/custo do contexto mandado
+    # pro LLM a cada turno: últimas 5 mensagens, dentro de uma janela de
+    # 3 horas. As 5 cobrem a maioria das trocas de esclarecimento (peça,
+    # cor, quantidade, entrega) sem inflar o prompt sem necessidade: as 3h
+    # evitam ressuscitar uma conversa abandonada há muito tempo como se
+    # fosse a mesma sessão — o cliente pode ter mudado de assunto, ou nem
+    # lembrar mais do que perguntou antes, e tratar aquilo como contexto
+    # ainda válido confunde mais do que ajuda.
+    async def listar_recentes(self, cliente_id: UUID, limit: int = 5) -> list[Mensagem]:
+        desde = datetime.now(timezone.utc) - timedelta(hours=3)
+        return await self._repository.listar_por_cliente(cliente_id, limit, desde)
 
     async def registrar_resposta(
         self,

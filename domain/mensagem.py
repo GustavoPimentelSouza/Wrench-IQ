@@ -42,6 +42,13 @@ class MotivoAtendimento(str, enum.Enum):
     # cobre — em ambos, continuar tentando sozinha só gasta chamada de API
     # e atrasa quem precisa de fato de um humano.
     LIMITE_TROCAS_ATINGIDO = "limite_trocas_atingido"
+    # Guardrail de "promessa não cumprida" (ver ConversaUseCases): a IA
+    # citou um rótulo tipo "endereço:"/"horário:"/"valor:" sem o dado
+    # correspondente vir na sequência — sinal de resposta cortada/mal
+    # formada. Nunca deixa esse texto quebrado ir pro cliente; troca por
+    # fallback e manda pra revisão humana, porque o dado prometido pode
+    # estar errado ou ausente de verdade (não é só estética).
+    PROMESSA_NAO_CUMPRIDA = "promessa_nao_cumprida"
 
 
 @dataclass

@@ -27,11 +27,15 @@ class ConfiguracaoOficina:
     # AgendamentoDisponibilidadeUseCases.liberar_no_shows). Configurável
     # porque o "tempo de tolerância razoável" varia de oficina pra oficina.
     tolerancia_no_show_minutos: int = 20
-    # Quantas trocas seguidas com o cliente, sem nenhuma ação concluída
-    # (pedido criado, agendamento marcado, cancelamento), até desistir de
-    # deixar só a IA tentando e transferir pra atendente humano (ver
-    # ConversaUseCases.responder). Existe porque a IA sozinha nunca acerta
-    # 100% das vezes, e insistir sem limite só atrasa quem realmente
-    # precisa de um humano (ou vira alvo de alguém tentando manipular a
-    # conversa, ex: fingir ser "dono da oficina" pra forçar desconto).
-    limite_trocas_sem_resolucao: int = 3
+    # Limite da CONVERSA INTEIRA (diferente de MAX_RODADAS_FERRAMENTA, que é
+    # só dentro de uma única resposta) — quantas trocas seguidas com o
+    # cliente, sem nenhuma ação concluída (pedido criado, agendamento
+    # marcado, cancelamento), até desistir de deixar só a IA tentando e
+    # transferir pra atendente humano (ver ConversaUseCases.responder).
+    # Existe porque a IA sozinha nunca acerta 100% das vezes, e insistir sem
+    # limite só atrasa quem realmente precisa de um humano (ou vira alvo de
+    # alguém tentando manipular a conversa, ex: fingir ser "dono da
+    # oficina" pra forçar desconto). 8 dá espaço pra esclarecimentos
+    # legítimos de várias etapas (peça + cor + quantidade + entrega, por
+    # exemplo) sem deixar a conversa girar indefinidamente.
+    limite_trocas_sem_resolucao: int = 8

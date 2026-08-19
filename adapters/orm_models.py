@@ -262,7 +262,7 @@ class ConfiguracaoOficinaORM(Base):
         Integer, nullable=False, default=20, server_default="20"
     )
     limite_trocas_sem_resolucao: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=3, server_default="3"
+        Integer, nullable=False, default=8, server_default="8"
     )
 
 
