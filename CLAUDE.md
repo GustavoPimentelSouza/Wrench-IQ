@@ -64,8 +64,8 @@ Clean Architecture:
    campo extra numa ferramenta só — evita a IA agendar visita por engano
    só porque o cliente mencionou uma peça.
 10. **Toda resposta de "sem horário disponível" tem que vir junto com a
-    próxima data que tem vaga** (ou lista de espera) — nunca só "não tem
-    horário", pra não perder cliente por resposta de porta fechada.
+    próxima data que tem vaga** — nunca só "não tem horário", pra não
+    perder cliente por resposta de porta fechada.
 
 ## Como construir
 
