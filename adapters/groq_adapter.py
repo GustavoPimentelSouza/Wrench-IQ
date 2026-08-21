@@ -11,7 +11,9 @@ _BASE_URL = "https://api.groq.com/openai/v1"
 
 _MODELO_PADRAO = "openai/gpt-oss-120b"
 # Classificação fixa em poucas categorias não precisa do modelo grande.
-_MODELO_CLASSIFICACAO_PADRAO = "llama-3.1-8b-instant"
+# llama-3.1-8b-instant foi descontinuado pela Groq (404 model_not_found) —
+# trocado por gpt-oss-20b, confirmado disponível no catálogo atual.
+_MODELO_CLASSIFICACAO_PADRAO = "openai/gpt-oss-20b"
 
 # Sem isso, a API roda no default (1.0) — alto pra decisão binária de tool
 # calling (chamar ferramenta ou não, qual) e já causou inconsistência
