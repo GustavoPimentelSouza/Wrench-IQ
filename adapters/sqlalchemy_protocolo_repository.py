@@ -1,7 +1,6 @@
-from datetime import date, datetime, time, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters._especialidades import carregar, substituir
@@ -89,14 +88,3 @@ class SqlAlchemyProtocoloRepository:
         )
         await self._session.commit()
         return await _to_domain(self._session, orm)
-
-    async def contar_por_periodo(self, inicio: date, fim: date) -> int:
-        inicio_dt = datetime.combine(inicio, time.min, tzinfo=timezone.utc)
-        fim_dt = datetime.combine(fim, time.max, tzinfo=timezone.utc)
-        result = await self._session.execute(
-            select(func.count())
-            .select_from(ProtocoloORM)
-            .where(ProtocoloORM.criado_em >= inicio_dt)
-            .where(ProtocoloORM.criado_em <= fim_dt)
-        )
-        return result.scalar_one()
