@@ -4,6 +4,7 @@ from typing import Any
 
 from openai import AsyncOpenAI, BadRequestError
 
+from adapters.estado_ia import registrar_falha_classificacao
 from application.chat_service import ChamadaFerramenta, RespostaChat
 from domain.mensagem import CategoriaMensagem
 
@@ -221,6 +222,10 @@ class GroqClassificador:
             try:
                 resposta = await self._chamar_classificacao(mensagens)
             except Exception:
+                # Registrado pra aparecer na tela (ver adapters/estado_ia.py
+                # e infrastructure/routers/sistema.py) — antes essa falha
+                # sumia sem deixar rastro nenhum.
+                registrar_falha_classificacao()
                 return CategoriaMensagem.NAO_IDENTIFICADO
 
         conteudo = resposta.choices[0].message.content or "{}"

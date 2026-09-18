@@ -1,4 +1,5 @@
 import { Outlet } from "react-router-dom";
+import { AvisoFalhaIA } from "./AvisoFalhaIA";
 import { Sidebar } from "./Sidebar";
 
 export function AppLayout() {
@@ -8,6 +9,7 @@ export function AppLayout() {
       <main className="flex-1 overflow-y-auto p-8">
         <Outlet />
       </main>
+      <AvisoFalhaIA />
     </div>
   );
 }
