@@ -8,12 +8,12 @@ from uuid import UUID
 from application.agendamento_use_cases import AgendamentoUseCases
 from application.chat_service import ChatService, RespostaChat
 from application.configuracao_oficina_use_cases import ConfiguracaoOficinaUseCases
-from application.conversa_executor_ferramentas import ExecutorFerramentasConversa
 from application.conversa_atalhos import (
     contar_trocas_sem_resolucao,
     resposta_confirmacao_encerramento,
     resposta_saudacao_pura,
 )
+from application.conversa_executor_ferramentas import ExecutorFerramentasConversa
 from application.conversa_ferramentas import (
     FERRAMENTAS_AGENDAMENTO,
     FERRAMENTAS_VENDA,
