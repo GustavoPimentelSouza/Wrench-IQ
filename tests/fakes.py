@@ -27,8 +27,6 @@ class FakeClassificador:
         "batida": CategoriaMensagem.DANO_ESTRUTURAL,
         "agendar": CategoriaMensagem.AGENDAMENTO,
         "protocolo": CategoriaMensagem.STATUS_PROTOCOLO,
-        "reclamacao": CategoriaMensagem.RECLAMACAO_SENSIVEL,
-        "reclamação": CategoriaMensagem.RECLAMACAO_SENSIVEL,
     }
 
     async def classificar(self, texto: str) -> CategoriaMensagem:

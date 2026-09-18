@@ -9,18 +9,17 @@ import {
 import { listarClientes } from "../services/clienteService";
 import type { Cliente } from "../types/cliente";
 
-// Sem isso, falha técnica (Groq fora do ar, rate limit) e reclamação de
-// cliente de verdade apareciam idênticas na fila — o atendente só descobria
-// qual era qual lendo a conversa inteira. Cores diferentes = triagem rápida.
+// Sem isso, falha técnica (Groq fora do ar, rate limit) e transferência
+// decidida pela IA (ex: cliente reclamando) apareciam idênticas na fila — o
+// atendente só descobria qual era qual lendo a conversa inteira. Cores
+// diferentes = triagem rápida.
 const MOTIVO_LABELS: Record<MotivoAtendimento, string> = {
   falha_tecnica: "Falha técnica",
-  reclamacao_sensivel: "Reclamação",
   transferencia_ia: "Transferido pela IA",
 };
 
 const MOTIVO_CORES: Record<MotivoAtendimento, string> = {
   falha_tecnica: "bg-gray-100 text-gray-600",
-  reclamacao_sensivel: "bg-red-100 text-red-700",
   transferencia_ia: "bg-violet-100 text-violet-700",
 };
 

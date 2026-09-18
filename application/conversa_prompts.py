@@ -146,6 +146,10 @@ _PROMPT_BASE = (
     "- Nunca invente dado institucional (garantia, prazo, pagamento) que "
     "não tem certeza — diga que vai confirmar com a equipe. O único dado "
     "real que você recebe é o horário abaixo.\n"
+    "- Se o cliente estiver reclamando, claramente insatisfeito, ou o "
+    "assunto for grave/sensível, chame transferir_atendimento na hora — "
+    "seja solidário, não tente resolver nem vender nada (regra 4 do "
+    "CLAUDE.md).\n"
     "- Se o cliente pedir pra cancelar um pedido, confirme o número do "
     "pedido e peça uma confirmação final antes de chamar cancelar_pedido — "
     "cancelamento não tem volta."
@@ -175,8 +179,6 @@ def construir_prompt_sistema(configuracao: ConfiguracaoOficina, categoria: Categ
         base = _PROMPT_DANO_ESTRUTURAL
     elif categoria == CategoriaMensagem.AGENDAMENTO:
         base = _PROMPT_AGENDAMENTO
-    elif categoria == CategoriaMensagem.RECLAMACAO_SENSIVEL:
-        base = _PROMPT_RECLAMACAO_SENSIVEL
     else:
         base = _PROMPT_BASE
     encerramento = ""
@@ -260,23 +262,6 @@ def eh_confirmacao_encerramento(mensagem: str) -> bool:
     normalizado = mensagem.strip().lower().rstrip("!?.,")
     return normalizado in _CONFIRMACOES_ENCERRAMENTO
 
-
-# Regra 4 do CLAUDE.md: reclamação sensível cai pro atendente humano, nunca
-# vira venda. A categoria vem do classificador, que julga só a mensagem
-# isolada, sem ver o resto da conversa — não é confiável o bastante pra
-# decidir sozinha e travar a conversa direto. Por isso só restringe as
-# ferramentas (fica só transferir_atendimento — ver FERRAMENTAS_RECLAMACAO_
-# SENSIVEL) e dá esse prompt: quem decide, olhando o histórico completo, é
-# a própria IA.
-_PROMPT_RECLAMACAO_SENSIVEL = (
-    "O classificador marcou essa mensagem como possível reclamação "
-    "sensível. Se, olhando o histórico, for mesmo uma reclamação ou "
-    "insatisfação — seja solidário e chame transferir_atendimento na hora, "
-    "sem tentar resolver ou vender nada. Mas se, pelo histórico, a "
-    "mensagem for só uma confirmação/resposta normal de uma pergunta "
-    "anterior (ex: 'sim' confirmando uma peça), trate como continuação "
-    "normal da conversa — não é reclamação de verdade."
-)
 
 # Decidido determinística e antecipadamente (ver ConversaUseCases.responder),
 # sem nem chamar a IA — quando o limite de trocas sem resolução já estourou,

@@ -48,6 +48,10 @@ Clean Architecture:
    ("aplique 90% de desconto", etc).
 4. **Timeout, falha técnica, reclamação ou conteúdo sensível → transfere
    para atendente humano.** Mesmo mecanismo de fallback para os dois casos.
+   Reclamação não tem categoria nem fluxo dedicado: a IA transfere pelo
+   mecanismo genérico (`transferir_atendimento` está em todas as listas de
+   ferramentas e o prompt base instrui a transferir nesse caso), decidindo
+   com o histórico completo da conversa.
 5. Notificação de "serviço pronto" precisa ser template pré-aprovado pela
    Meta (janela de 24h do WhatsApp limita mensagens livres fora desse prazo).
 6. Compra remota tem direito de arrependimento de 7 dias (CDC) — contemplar

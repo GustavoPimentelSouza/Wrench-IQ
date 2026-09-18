@@ -183,7 +183,6 @@ _PROMPT_CLASSIFICACAO = (
     "consulta_peca.\n"
     "- agendamento: cliente quer marcar uma visita/horário.\n"
     "- status_protocolo: pergunta sobre andamento de um serviço já em execução.\n"
-    "- reclamacao_sensivel: cliente insatisfeito, reclamando, ou assunto grave/sensível.\n"
     "- nao_identificado: não deu pra identificar.\n"
     'Responda APENAS um JSON no formato {"categoria": "<valor>"}, com um '
     "desses valores exatos, sem inventar nenhum outro."

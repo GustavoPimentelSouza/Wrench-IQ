@@ -122,49 +122,22 @@ async def test_consultar_preco_peca_prefere_variante_com_a_cor_pedida():
     assert "120" not in resultado.texto
 
 
-async def test_reclamacao_sensivel_so_oferece_transferir_e_nunca_venda():
-    # Regra 4 do CLAUDE.md: reclamação sensível nunca pode virar venda de
-    # peça — só transferir_atendimento fica disponível pra IA nesse modo.
+async def test_cliente_reclamando_pode_ser_transferido_pela_ia():
+    # Sem categoria dedicada: a mensagem cai no fluxo de venda normal, que
+    # tem transferir_atendimento na lista (regra 4 do CLAUDE.md) — a IA
+    # decide transferir e o resultado marca handoff pra humano.
     chamada = ChamadaFerramenta(id="call_1", nome="transferir_atendimento", argumentos={"motivo": "Cliente insatisfeito"})
     chat = FakeChatService(respostas=[RespostaChat(texto=None, chamadas_ferramentas=[chamada])])
     conversa = _montar_conversa(chat_service=chat)
 
     resultado = await conversa.responder(
-        "isso é um absurdo, quero reclamar", uuid4(), CategoriaMensagem.RECLAMACAO_SENSIVEL
+        "isso é um absurdo, quero reclamar", uuid4(), CategoriaMensagem.NAO_IDENTIFICADO
     )
 
     assert resultado.precisa_atendimento_humano is True
     assert resultado.motivo_atendimento == MotivoAtendimento.TRANSFERENCIA_IA
     ferramentas_oferecidas = _nomes_ferramentas(chat.ferramentas_recebidas[0])
-    assert ferramentas_oferecidas == {"transferir_atendimento"}
-
-
-async def test_reclamacao_sensivel_mal_classificada_nao_trava_confirmacao():
-    # A categoria vem de classificar só a mensagem atual, sem ver o
-    # histórico — pode errar em mensagens curtas e ambíguas (ex: "sim"
-    # confirmando uma peça, sem nenhum sinal de reclamação nela mesma). A
-    # IA recebe o histórico completo e decide de verdade; uma classificação
-    # errada não pode travar a conversa sem chance de recuperação.
-    chat = FakeChatService()
-    historico = [
-        Mensagem(
-            id=uuid4(),
-            cliente_id=uuid4(),
-            texto="quero o farol da cg 160",
-            categoria=CategoriaMensagem.CONSULTA_PECA,
-            criado_em=datetime.now(timezone.utc),
-            resposta_ia="Achei o Farol dianteiro (Honda CG 160). É essa a peça?",
-        )
-    ]
-    conversa = _montar_conversa(chat_service=chat)
-
-    resultado = await conversa.responder(
-        "sim", uuid4(), CategoriaMensagem.RECLAMACAO_SENSIVEL, historico=historico
-    )
-
-    assert resultado.precisa_atendimento_humano is False
-    ferramentas_oferecidas = _nomes_ferramentas(chat.ferramentas_recebidas[0])
-    assert ferramentas_oferecidas == {"transferir_atendimento"}
+    assert "transferir_atendimento" in ferramentas_oferecidas
 
 
 async def test_dano_estrutural_so_oferece_agendar_visita():

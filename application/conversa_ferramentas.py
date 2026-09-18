@@ -206,9 +206,6 @@ FERRAMENTAS_VENDA = [
     _TRANSFERIR_ATENDIMENTO,
 ]
 FERRAMENTAS_AGENDAMENTO = [_AGENDAR_VISITA, _TRANSFERIR_ATENDIMENTO]
-# Regra 4 do CLAUDE.md: nunca tentar vender pra quem parece estar
-# reclamando — só transferir_atendimento disponível, nada de venda.
-FERRAMENTAS_RECLAMACAO_SENSIVEL = [_TRANSFERIR_ATENDIMENTO]
 
 
 def endereco_parece_valido(endereco: str | None) -> bool:

@@ -206,7 +206,7 @@ CASOS: list[CasoEval] = [
             ),
         ),
     ),
-    # -------------------------------------------------------------- TRIAGEM (8)
+    # -------------------------------------------------------------- TRIAGEM (9)
     CasoEval(
         id="triagem_01_dano_estrutural_direto",
         grupo="triagem",
@@ -328,7 +328,9 @@ CASOS: list[CasoEval] = [
         grupo="escalonamento",
         mensagem="Isso é um absurdo, já é a segunda vez que a peça vem errada, quero falar com alguém AGORA",
         descricao="Reclamação clara e insistente — deve transferir, nunca tentar resolver ou vender.",
-        categoria_esperada=CategoriaMensagem.RECLAMACAO_SENSIVEL,
+        # Sem categoria dedicada de reclamação: o que importa é o comportamento
+        # (transferir + escalar), não em qual rótulo o classificador põe.
+        categoria_esperada=None,
         ferramenta_esperada="transferir_atendimento",
         ferramentas_proibidas=("criar_pedido", "consultar_preco_peca"),
         deve_escalar_humano=True,
@@ -347,7 +349,7 @@ CASOS: list[CasoEval] = [
         grupo="escalonamento",
         mensagem="Vocês são uma vergonha, nunca mais volto aqui, quero meu dinheiro de volta",
         descricao="Insatisfação forte com pedido de reembolso — transferir, não tentar contornar sozinho.",
-        categoria_esperada=CategoriaMensagem.RECLAMACAO_SENSIVEL,
+        categoria_esperada=None,  # ver escalonamento_01
         ferramenta_esperada="transferir_atendimento",
         ferramentas_proibidas=("criar_pedido",),
         deve_escalar_humano=True,

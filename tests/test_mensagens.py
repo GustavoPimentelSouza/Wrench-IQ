@@ -58,11 +58,6 @@ async def test_classifica_status_protocolo(client):
     assert categoria == "status_protocolo"
 
 
-async def test_classifica_reclamacao_sensivel(client):
-    categoria = await _classificar(client, "Quero fazer uma reclamação sobre o atendimento")
-    assert categoria == "reclamacao_sensivel"
-
-
 async def test_mensagem_persistida_no_banco(client):
     cliente_id = await _criar_cliente()
 

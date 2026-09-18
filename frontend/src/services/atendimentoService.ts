@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "./api";
 
-export type MotivoAtendimento = "falha_tecnica" | "reclamacao_sensivel" | "transferencia_ia";
+export type MotivoAtendimento = "falha_tecnica" | "transferencia_ia";
 
 export interface MensagemAtendimento {
   id: string;

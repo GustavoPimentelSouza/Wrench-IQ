@@ -11,7 +11,6 @@ from application.configuracao_oficina_use_cases import ConfiguracaoOficinaUseCas
 from application.conversa_executor_ferramentas import ExecutorFerramentasConversa
 from application.conversa_ferramentas import (
     FERRAMENTAS_AGENDAMENTO,
-    FERRAMENTAS_RECLAMACAO_SENSIVEL,
     FERRAMENTAS_VENDA,
 )
 from application.conversa_prompts import (
@@ -245,19 +244,17 @@ class ConversaUseCases:
         em_fluxo_consulta_peca = categoria == CategoriaMensagem.CONSULTA_PECA or any(
             anterior.categoria == CategoriaMensagem.CONSULTA_PECA for anterior in historico
         )
-        # Reclamação não "gruda" nos turnos seguintes que nem dano estrutural
-        # — se ainda for reclamação de verdade, o classificador ou a própria
-        # IA (vendo o histórico) reconhece de novo; não precisa forçar.
         if em_fluxo_dano_estrutural:
             categoria_efetiva = CategoriaMensagem.DANO_ESTRUTURAL
             ferramentas = FERRAMENTAS_AGENDAMENTO
         elif em_fluxo_agendamento:
             categoria_efetiva = CategoriaMensagem.AGENDAMENTO
             ferramentas = FERRAMENTAS_AGENDAMENTO
-        elif categoria == CategoriaMensagem.RECLAMACAO_SENSIVEL:
-            categoria_efetiva = CategoriaMensagem.RECLAMACAO_SENSIVEL
-            ferramentas = FERRAMENTAS_RECLAMACAO_SENSIVEL
         else:
+            # Inclui reclamação/insatisfação: sem categoria dedicada, cai no
+            # fluxo de venda — que já tem transferir_atendimento na lista
+            # (regra 4 do CLAUDE.md) e o prompt manda a IA transferir nesse
+            # caso, decidindo com o histórico completo.
             categoria_efetiva = categoria
             ferramentas = FERRAMENTAS_VENDA
         track: list[str] = [
