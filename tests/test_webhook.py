@@ -26,11 +26,12 @@ async def test_webhook_retorna_resposta_da_ia(client):
     assert resposta.status_code == 200
     # FakeChatService (tests/fakes.py) não chama IA de verdade — só confirma
     # que o webhook está repassando a resposta do ChatService, não mais o eco.
-    assert resposta.json() == {
-        "resposta": "[fake-ia] resposta para: teste",
-        "ferramentas_chamadas": [],
-        "imagem_url": None,
-    }
+    # endswith, não == : é a primeira mensagem da conversa, então vem com a
+    # apresentação inicial na frente (ver ConversaUseCases.responder).
+    corpo = resposta.json()
+    assert corpo["resposta"].endswith("[fake-ia] resposta para: teste")
+    assert corpo["ferramentas_chamadas"] == []
+    assert corpo["imagem_url"] is None
 
 
 async def test_webhook_cria_cliente_novo_e_persiste_mensagem(client):

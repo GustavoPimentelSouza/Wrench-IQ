@@ -70,6 +70,7 @@ export function ConfiguracoesPage() {
   const { token } = useAuth();
   const [nomeEmpresa, setNomeEmpresa] = useState("");
   const [endereco, setEndereco] = useState("");
+  const [mensagemApresentacao, setMensagemApresentacao] = useState("");
   const [mensagemEncerramento, setMensagemEncerramento] = useState("");
   const [semana, setSemana] = useState<FormularioDia>(diaInicial("08:00", "19:00"));
   const [sabado, setSabado] = useState<FormularioDia>(diaInicial("08:00", "18:00"));
@@ -84,6 +85,7 @@ export function ConfiguracoesPage() {
       .then((config) => {
         setNomeEmpresa(config.nome_empresa);
         setEndereco(config.endereco ?? "");
+        setMensagemApresentacao(config.mensagem_apresentacao ?? "");
         setMensagemEncerramento(config.mensagem_encerramento ?? "");
         setSemana(diaInicial(config.horario_semana_abertura, config.horario_semana_fechamento));
         setSabado(diaInicial(config.horario_sabado_abertura, config.horario_sabado_fechamento));
@@ -108,6 +110,7 @@ export function ConfiguracoesPage() {
     const payload: ConfiguracaoOficina = {
       nome_empresa: nomeEmpresa,
       endereco: endereco.trim() || null,
+      mensagem_apresentacao: mensagemApresentacao.trim() || null,
       mensagem_encerramento: mensagemEncerramento.trim() || null,
       horario_semana_abertura: semana.abertura,
       horario_semana_fechamento: semana.fechamento,
@@ -155,6 +158,16 @@ export function ConfiguracoesPage() {
               value={endereco}
               onChange={(evento) => setEndereco(evento.target.value)}
               placeholder="Ex: Rua das Oficinas, 123 - Centro"
+              className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+            />
+            <label className="mb-1 block text-sm font-medium text-gray-900">
+              Apresentação inicial
+            </label>
+            <input
+              type="text"
+              value={mensagemApresentacao}
+              onChange={(evento) => setMensagemApresentacao(evento.target.value)}
+              placeholder="Ex: Olá! Sou o assistente virtual da Oficina Dugrau. Como posso te ajudar hoje?"
               className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
             />
             <label className="mb-1 block text-sm font-medium text-gray-900">

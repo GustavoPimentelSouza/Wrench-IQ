@@ -92,8 +92,29 @@ async def test_saudacao_nao_chama_ia():
 
     resultado = await conversa.responder("oi", uuid4(), CategoriaMensagem.NAO_IDENTIFICADO)
 
-    assert "peça" in resultado.texto.lower()
+    # Primeira mensagem da conversa: a apresentação já cobre o convite a
+    # ajudar, substitui o texto de MENSAGEM_SAUDACAO em vez de concatenar
+    # (ver ConversaUseCases.responder) — por isso "Oficina Teste", não "peça".
+    assert "oficina teste" in resultado.texto.lower()
     assert chat.ferramentas_recebidas == []  # IA nunca foi chamada
+
+
+async def test_saudacao_fora_da_primeira_mensagem_usa_texto_padrao():
+    chat = FakeChatService()
+    conversa = _montar_conversa(chat_service=chat)
+    historico = [
+        _mensagem_consulta_peca(
+            resposta_ia="Temos o Paralama (Honda 2020-2025) por R$ 120,00, disponível.",
+            ferramentas_chamadas=["consultar_preco_peca"],
+        )
+    ]
+
+    resultado = await conversa.responder(
+        "oi", uuid4(), CategoriaMensagem.NAO_IDENTIFICADO, historico=historico
+    )
+
+    assert "peça" in resultado.texto.lower()
+    assert chat.ferramentas_recebidas == []
 
 
 async def test_consultar_preco_peca_prefere_variante_com_a_cor_pedida():
@@ -927,7 +948,10 @@ async def test_promessa_nao_cumprida_endereco_sem_dado_e_substituida():
         "qual o endereço de vocês?", uuid4(), CategoriaMensagem.DUVIDA_GERAL
     )
 
-    assert resultado.texto == MENSAGEM_PROMESSA_NAO_CUMPRIDA
+    # endswith, não == : primeira mensagem da conversa vem com apresentação
+    # inicial na frente (ver ConversaUseCases.responder) — irrelevante pro
+    # que esse teste verifica.
+    assert resultado.texto.endswith(MENSAGEM_PROMESSA_NAO_CUMPRIDA)
     assert resultado.precisa_atendimento_humano is True
     assert resultado.motivo_atendimento == MotivoAtendimento.PROMESSA_NAO_CUMPRIDA
 
@@ -944,7 +968,8 @@ async def test_promessa_cumprida_com_dado_real_nao_e_bloqueada():
         "qual o endereço de vocês?", uuid4(), CategoriaMensagem.DUVIDA_GERAL
     )
 
-    assert resultado.texto == "Endereço: Rua das Flores, 123, Centro."
+    # endswith pelo mesmo motivo do teste acima (apresentação inicial).
+    assert resultado.texto.endswith("Endereço: Rua das Flores, 123, Centro.")
     assert resultado.precisa_atendimento_humano is False
 
 

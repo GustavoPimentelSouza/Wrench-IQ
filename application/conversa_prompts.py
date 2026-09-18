@@ -270,6 +270,22 @@ _CONFIRMACOES_ENCERRAMENTO = {
 MENSAGEM_ENCERRAMENTO_PADRAO = "Por nada! Qualquer coisa, é só chamar."
 
 
+# Só entra na PRIMEIRA mensagem de cada conversa (ver
+# ConversaUseCases.responder) — bug real visto no simulador: a IA respondia
+# direto ao pedido sem nunca dizer quem é ou de qual oficina, ficava
+# seco/anônimo (ex: "Ok, como posso ajudar?"). Configurável por oficina
+# (ConfiguracaoOficina.mensagem_apresentacao, mesmo padrão de
+# mensagem_encerramento) — sem configurar, cai nesse texto neutro. De
+# propósito NÃO tem nome de persona fixo (ex: "Sou a Lanna") — é SaaS
+# multi-oficina, e assumir uma identidade humana por padrão seria
+# antitransparente; quem quiser esse estilo configura o próprio texto.
+def apresentacao_inicial(configuracao: ConfiguracaoOficina) -> str:
+    return configuracao.mensagem_apresentacao or (
+        f"Olá! Sou o assistente virtual da {configuracao.nome_empresa}. "
+        "Como posso te ajudar hoje?"
+    )
+
+
 def eh_confirmacao_encerramento(mensagem: str) -> bool:
     normalizado = mensagem.strip().lower().rstrip("!?.,")
     return normalizado in _CONFIRMACOES_ENCERRAMENTO

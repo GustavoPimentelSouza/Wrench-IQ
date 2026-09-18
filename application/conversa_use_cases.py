@@ -9,21 +9,23 @@ from application.agendamento_use_cases import AgendamentoUseCases
 from application.chat_service import ChatService, RespostaChat
 from application.configuracao_oficina_use_cases import ConfiguracaoOficinaUseCases
 from application.conversa_executor_ferramentas import ExecutorFerramentasConversa
+from application.conversa_atalhos import (
+    contar_trocas_sem_resolucao,
+    resposta_confirmacao_encerramento,
+    resposta_saudacao_pura,
+)
 from application.conversa_ferramentas import (
     FERRAMENTAS_AGENDAMENTO,
     FERRAMENTAS_VENDA,
 )
 from application.conversa_prompts import (
     MAX_RODADAS_FERRAMENTA,
-    MENSAGEM_ENCERRAMENTO_PADRAO,
     MENSAGEM_FALLBACK_ERRO,
     MENSAGEM_LIMITE_TROCAS,
     MENSAGEM_PRECO_NAO_VERIFICADO,
     MENSAGEM_PROMESSA_NAO_CUMPRIDA,
-    MENSAGEM_SAUDACAO,
+    apresentacao_inicial,
     construir_prompt_sistema,
-    eh_confirmacao_encerramento,
-    eh_saudacao,
 )
 from application.peca_repository import PecaRepository
 from application.pedido_use_cases import PedidoUseCases
@@ -101,13 +103,6 @@ class ResultadoConversa:
     track_decisoes: list[str] = field(default_factory=list)
 
 
-# Ferramentas que representam uma transação concluída de verdade (algo que
-# não pode ser repetido sem querer). transferir_atendimento fica de fora —
-# depois de um handoff pra humano não faz sentido "fechar a conversa" pela
-# IA, então não participa dessa checagem.
-_ACOES_TRANSACIONAIS = {"criar_pedido", "cancelar_pedido", "agendar_visita"}
-
-
 # Único caso de uso que de fato chama ChatService.gerar_resposta() — o
 # outro que falta (visao_service/transcricao_service) ainda não tem
 # equivalente. Os schemas das ferramentas e os prompts moraram aqui antes,
@@ -138,27 +133,43 @@ class ConversaUseCases:
         categoria: CategoriaMensagem,
         historico: list[Mensagem] | None = None,
     ) -> ResultadoConversa:
-        if eh_saudacao(mensagem):
+        historico = historico or []
+        eh_primeira_mensagem = not historico
+        configuracao = await self._configuracao_oficina.buscar()
+        # Saudação pura na primeira mensagem: a apresentação já cobre o
+        # convite a ajudar ("Como posso te ajudar hoje?") — concatenar as
+        # duas duplicava "Olá!" (bug real visto no simulador: "Olá! Sou o
+        # assistente virtual... Olá! Me conta..."). Fora da primeira
+        # mensagem, MENSAGEM_SAUDACAO sozinha continua valendo.
+        texto_saudacao = resposta_saudacao_pura(mensagem)
+        if texto_saudacao is not None:
+            texto = apresentacao_inicial(configuracao) if eh_primeira_mensagem else texto_saudacao
             return ResultadoConversa(
-                texto=MENSAGEM_SAUDACAO,
+                texto=texto,
                 track_decisoes=["guardrail: saudação pura (atalho determinístico, sem chamar IA)"],
             )
-        historico = historico or []
-        configuracao = await self._configuracao_oficina.buscar()
-        # Alta confiança, decidido sem chamar o modelo: cliente confirmando
-        # que não quer mais nada, logo depois de uma ação concluída (pedido
-        # criado, agendamento marcado, etc.). Já vimos o modelo, nesse
-        # exato cenário, chamar criar_pedido de novo pra mesma compra em
-        # vez de encerrar — não é algo que deva depender dele acertar toda
-        # vez, então nem chega a chamar a IA aqui.
-        se_encerrando = (
-            historico
-            and historico[-1].acao_finalizadora in _ACOES_TRANSACIONAIS
-            and eh_confirmacao_encerramento(mensagem)
-        )
-        if se_encerrando:
+        resultado = await self._decidir_resposta(mensagem, cliente_id, categoria, historico, configuracao)
+        # Regra de produto: toda primeira mensagem de uma conversa nova
+        # começa com uma apresentação (quem é a IA, de qual oficina) — sem
+        # isso, o primeiro contato saía seco/anônimo (ex: "Ok, como posso
+        # ajudar?", visto ao vivo no simulador). Só entra na primeira
+        # mensagem pra não repetir isso a cada turno da mesma conversa.
+        if eh_primeira_mensagem:
+            resultado.texto = f"{apresentacao_inicial(configuracao)} {resultado.texto}"
+        return resultado
+
+    async def _decidir_resposta(
+        self,
+        mensagem: str,
+        cliente_id: UUID,
+        categoria: CategoriaMensagem,
+        historico: list[Mensagem],
+        configuracao: ConfiguracaoOficina,
+    ) -> ResultadoConversa:
+        texto_encerramento = resposta_confirmacao_encerramento(mensagem, historico, configuracao)
+        if texto_encerramento is not None:
             return ResultadoConversa(
-                texto=configuracao.mensagem_encerramento or MENSAGEM_ENCERRAMENTO_PADRAO,
+                texto=texto_encerramento,
                 track_decisoes=[
                     "guardrail: confirmação de encerramento após ação concluída "
                     "(atalho determinístico, sem chamar IA)"
@@ -172,14 +183,8 @@ class ConversaUseCases:
         # insistindo em algo que não deveria ser resolvido pelo chat" (ex:
         # tentando negociar preço se passando por dono da oficina) —
         # decidido ANTES de chamar o modelo, sem gastar mais uma chamada de
-        # API à toa. Reseta sozinho: acao_finalizadora inclui
-        # transferir_atendimento, então depois de um handoff o contador
-        # volta a zero pro próximo assunto.
-        trocas_sem_resolucao = 0
-        for anterior in reversed(historico):
-            if anterior.acao_finalizadora is not None:
-                break
-            trocas_sem_resolucao += 1
+        # API à toa.
+        trocas_sem_resolucao = contar_trocas_sem_resolucao(historico)
         if trocas_sem_resolucao >= configuracao.limite_trocas_sem_resolucao:
             return ResultadoConversa(
                 texto=MENSAGEM_LIMITE_TROCAS,

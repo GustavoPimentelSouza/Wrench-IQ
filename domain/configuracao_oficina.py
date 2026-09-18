@@ -21,6 +21,11 @@ class ConfiguracaoOficina:
     horario_domingo_fechamento: time | None
     endereco: str | None = None
     mensagem_encerramento: str | None = None
+    # Apresentação da IA na primeira mensagem de cada conversa nova (ver
+    # ConversaUseCases.responder). None cai num padrão neutro no código
+    # ("Olá! Sou o assistente virtual da {nome_empresa}.") — esse campo
+    # existe pra cada oficina poder personalizar o tom/estilo.
+    mensagem_apresentacao: str | None = None
     # Passado esse tempo do horário marcado sem o cliente aparecer, o
     # agendamento é liberado automaticamente e oferecido pro primeiro da
     # lista de espera daquela especialidade (ver

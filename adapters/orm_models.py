@@ -258,6 +258,7 @@ class ConfiguracaoOficinaORM(Base):
     horario_domingo_fechamento: Mapped[time | None] = mapped_column(Time, nullable=True)
     endereco: Mapped[str | None] = mapped_column(String, nullable=True)
     mensagem_encerramento: Mapped[str | None] = mapped_column(String, nullable=True)
+    mensagem_apresentacao: Mapped[str | None] = mapped_column(String, nullable=True)
     tolerancia_no_show_minutos: Mapped[int] = mapped_column(
         Integer, nullable=False, default=20, server_default="20"
     )

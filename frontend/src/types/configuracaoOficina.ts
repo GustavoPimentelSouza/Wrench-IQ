@@ -8,4 +8,5 @@ export interface ConfiguracaoOficina {
   horario_domingo_fechamento: string | null;
   endereco: string | null;
   mensagem_encerramento: string | null;
+  mensagem_apresentacao: string | null;
 }
