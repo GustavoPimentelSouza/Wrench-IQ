@@ -19,7 +19,7 @@ administrativo antes de chegar no humano.
 - Banco: PostgreSQL + pgvector (dados relacionais + busca semântica no mesmo banco)
 - Fila: Redis (mensageria assíncrona, picos de mensagem, notificações em lote)
 - WhatsApp: Evolution API (self-hosted, via Docker)
-- IA: Whisper (transcrição de áudio), GPT-4o Vision (análise de imagem),
+- IA: Whisper (transcrição de áudio), Gemini Vision (análise de imagem),
   tool calling para consulta de estoque, RAG (pgvector) para tradução de
   termo leigo → peça no catálogo
 - Infra: Docker Compose (api, worker, postgres, redis, evolution-api, frontend)
