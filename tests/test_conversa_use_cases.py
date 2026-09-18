@@ -140,8 +140,10 @@ async def test_cliente_reclamando_pode_ser_transferido_pela_ia():
     assert "transferir_atendimento" in ferramentas_oferecidas
 
 
-async def test_dano_estrutural_so_oferece_agendar_visita():
-    # Regra 1 do CLAUDE.md: dano estrutural nunca pode virar venda de peça.
+async def test_dano_estrutural_nao_oferece_cancelar_pedido_nem_status_protocolo():
+    # Regra 9 do CLAUDE.md: dano estrutural pode vender a peça avulsa que o
+    # cliente pedir pra comprar (consultar_preco_peca/criar_pedido), mas não
+    # tem por que gerenciar pedido/protocolo já existente nesse fluxo.
     chat = FakeChatService()
     conversa = _montar_conversa(chat_service=chat)
 
@@ -150,7 +152,9 @@ async def test_dano_estrutural_so_oferece_agendar_visita():
     )
 
     ferramentas_oferecidas = _nomes_ferramentas(chat.ferramentas_recebidas[0])
-    assert ferramentas_oferecidas == {"agendar_visita", "transferir_atendimento"}
+    assert ferramentas_oferecidas == {
+        "agendar_visita", "consultar_preco_peca", "criar_pedido", "transferir_atendimento"
+    }
 
 
 async def test_agendar_visita_salva_descricao_pro_mecanico_ler_depois():
@@ -185,7 +189,8 @@ async def test_dano_estrutural_gruda_mesmo_se_mensagem_atual_for_reclassificada(
     # Bug real encontrado em teste manual: a classificação é por mensagem
     # (sem memória), então "pode ser dia 10 às 14h" sozinha vem como
     # categoria "agendamento" — mas a conversa inteira ainda é sobre dano
-    # estrutural, e não pode virar venda de peça no meio do caminho.
+    # estrutural, e o prompt/ferramentas certos têm que continuar valendo,
+    # não os de agendamento comum.
     chat = FakeChatService()
     conversa = _montar_conversa(chat_service=chat)
     historico = [
@@ -207,7 +212,9 @@ async def test_dano_estrutural_gruda_mesmo_se_mensagem_atual_for_reclassificada(
     )
 
     ferramentas_oferecidas = _nomes_ferramentas(chat.ferramentas_recebidas[0])
-    assert ferramentas_oferecidas == {"agendar_visita", "transferir_atendimento"}
+    assert ferramentas_oferecidas == {
+        "agendar_visita", "consultar_preco_peca", "criar_pedido", "transferir_atendimento"
+    }
 
 
 async def test_criar_pedido_envio_remoto_com_endereco_invalido_nao_cria_pedido():
