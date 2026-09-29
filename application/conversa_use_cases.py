@@ -265,7 +265,7 @@ class ConversaUseCases:
         track: list[str] = [
             f"categoria classificada: {categoria.value}; categoria efetiva usada: {categoria_efetiva.value}"
         ]
-        prompt_sistema = construir_prompt_sistema(configuracao, categoria_efetiva)
+        prompt_sistema = construir_prompt_sistema(configuracao, categoria_efetiva, eh_primeira_mensagem=not historico)
         mensagens: list[dict[str, Any]] = [{"role": "system", "content": prompt_sistema}]
         for anterior in historico:
             mensagens.append({"role": "user", "content": anterior.texto})

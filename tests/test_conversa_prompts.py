@@ -44,3 +44,21 @@ def test_prompt_mensagem_encerramento_incluida():
 def test_prompt_dano_estrutural_nunca_estima_valor():
     prompt = construir_prompt_sistema(_CONFIG, CategoriaMensagem.DANO_ESTRUTURAL)
     assert "NUNCA estima valor" in prompt
+
+
+def test_prompt_primeira_mensagem_avisa_para_nao_cumprimentar_de_novo():
+    # Bug real: "opa, bom dia" não bate com o atalho determinístico de
+    # saudação pura (tem vírgula), cai na IA, que cumprimentava de novo por
+    # conta própria — duplicando a apresentação inicial (ver
+    # ConversaUseCases.responder).
+    prompt = construir_prompt_sistema(
+        _CONFIG, CategoriaMensagem.CONSULTA_PECA, eh_primeira_mensagem=True
+    )
+    assert "NUNCA cumprimente nem se apresente de novo" in prompt
+
+
+def test_prompt_fora_da_primeira_mensagem_nao_tem_aviso():
+    prompt = construir_prompt_sistema(
+        _CONFIG, CategoriaMensagem.CONSULTA_PECA, eh_primeira_mensagem=False
+    )
+    assert "cumprimente" not in prompt

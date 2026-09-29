@@ -174,7 +174,9 @@ def _formatar_periodo(abertura: time | None, fechamento: time | None) -> str:
     return f"{abertura.strftime('%H:%M')} às {fechamento.strftime('%H:%M')}"
 
 
-def construir_prompt_sistema(configuracao: ConfiguracaoOficina, categoria: CategoriaMensagem) -> str:
+def construir_prompt_sistema(
+    configuracao: ConfiguracaoOficina, categoria: CategoriaMensagem, eh_primeira_mensagem: bool = False
+) -> str:
     # Sem isso, a IA não tinha nenhum dado real de horário/endereço/nome e
     # inventava (já vimos ela responder um horário completo do nada). Agora
     # tudo isso vem sempre do banco (ConfiguracaoOficina), nunca da conversa.
@@ -202,7 +204,22 @@ def construir_prompt_sistema(configuracao: ConfiguracaoOficina, categoria: Categ
             " Quando a conversa estiver claramente terminando (cliente "
             f'agradece ou se despede), termine com: "{configuracao.mensagem_encerramento}"'
         )
-    return f"{_INSTRUCAO_ESCOPO} {dados}{horario} {base}{encerramento}"
+    apresentacao = ""
+    if eh_primeira_mensagem:
+        # Bug real visto ao vivo: cliente mandou "opa, bom dia" (saudação
+        # composta, não bate com o atalho determinístico de eh_saudacao) —
+        # a apresentação inicial já é adicionada em código (ver
+        # ConversaUseCases.responder), mas a IA, livre pra responder,
+        # cumprimentou de novo por conta própria ("Bom dia! Como posso
+        # ajudar?"), duplicando a saudação. Isso avisa a IA que a
+        # apresentação já está garantida, então ela nunca repete.
+        apresentacao = (
+            " Essa é a primeira mensagem do cliente nessa conversa — uma "
+            "apresentação da oficina já foi enviada automaticamente junto "
+            "com sua resposta; NUNCA cumprimente nem se apresente de novo, "
+            "vá direto ao que o cliente pediu."
+        )
+    return f"{_INSTRUCAO_ESCOPO} {dados}{horario} {base}{encerramento}{apresentacao}"
 
 
 # Rede de segurança: nunca deixa erro técnico do Groq (rede, tool_use_failed,
