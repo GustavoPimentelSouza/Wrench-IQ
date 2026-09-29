@@ -11,6 +11,7 @@ const ITENS_NAVEGACAO = [
   { rota: "/clientes", rotulo: "Clientes" },
   { rota: "/agenda", rotulo: "Agenda" },
   { rota: "/simulador", rotulo: "Simulador (IA)" },
+  { rota: "/historico-testes", rotulo: "Histórico de testes" }, // TEMPORÁRIO (dev)
   { rota: "/atendimento", rotulo: "Atendimento" },
   { rota: "/configuracoes", rotulo: "Configurações" },
 ];

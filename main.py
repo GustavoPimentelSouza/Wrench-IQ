@@ -5,6 +5,7 @@ from infrastructure.admin import registrar_admin
 from infrastructure.routers import (
     agendamentos,
     auth,
+    avaliacoes_teste,
     clientes,
     configuracao_oficina,
     mensagens,
@@ -39,5 +40,6 @@ app.include_router(agendamentos.router)
 app.include_router(movimentacoes_estoque.router)
 app.include_router(configuracao_oficina.router)
 app.include_router(sistema.router)
+app.include_router(avaliacoes_teste.router)  # TEMPORÁRIO (ferramenta de dev)
 
 registrar_admin(app)

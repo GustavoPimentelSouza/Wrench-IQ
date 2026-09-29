@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { AvaliacaoTesteForm } from "../components/AvaliacaoTesteForm";
 import { enviarMensagemSimulada } from "../services/webhookService";
 
 interface MensagemChat {
@@ -142,6 +143,9 @@ export function ChatSimuladorPage() {
           Enviar
         </button>
       </form>
+
+      {/* TEMPORÁRIO (dev). key={telefone}: "Nova conversa" troca o telefone e o formulário recomeça vazio. */}
+      {mensagens.length > 0 && <AvaliacaoTesteForm key={telefone} telefone={telefone} />}
     </div>
   );
 }

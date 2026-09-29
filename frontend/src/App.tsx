@@ -8,6 +8,7 @@ import { ChatSimuladorPage } from "./pages/ChatSimuladorPage";
 import { ClientesPage } from "./pages/ClientesPage";
 import { ConfiguracoesPage } from "./pages/ConfiguracoesPage";
 import { EstoquePage } from "./pages/EstoquePage";
+import { HistoricoTestesPage } from "./pages/HistoricoTestesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PainelPage } from "./pages/PainelPage";
 import { PedidosPage } from "./pages/PedidosPage";
@@ -27,6 +28,8 @@ export function App() {
             <Route path="/clientes" element={<ClientesPage />} />
             <Route path="/agenda" element={<AgendaPage />} />
             <Route path="/simulador" element={<ChatSimuladorPage />} />
+            {/* TEMPORÁRIO (ferramenta de dev) */}
+            <Route path="/historico-testes" element={<HistoricoTestesPage />} />
             <Route path="/atendimento" element={<AtendimentoPage />} />
             <Route path="/configuracoes" element={<ConfiguracoesPage />} />
           </Route>
